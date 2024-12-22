@@ -197,42 +197,64 @@ class BellMeasurementProtocol(NodeProtocol):
         super().__init__(node, name)
         self.start_expression = start_expression
         self.add_subprotocol(qubit_protocol, 'initprotocol')
+        if start_expression is not None and not isinstance(start_expression, EventExpression):
+            raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(start_expression)))
 
     def start(self):
         super().start()
 
     def run(self):
         qubit_initialised = False
-        entanglement_ready = False
-        evexpr_signal = self.await_signal(sender=self.subprotocols['initprotocol'], signal_label=Signals.SUCCESS)
-        if self.start_expression is not None:
-            yield self.start_expression
-            self.start_subprotocols()
-            yield evexpr_signal
-            print(f"Starting {self.name} protocol.")
-            mem_pos0 = self.subprotocols['initprotocol'].get_signal_result(Signals.SUCCESS, self)
-            print(f"Qubit0 position is {mem_pos0}")
-            self.node.qmemory.operate(ns.CNOT, [mem_pos0, 0])
-            self.node.qmemory.operate(ns.H, [mem_pos0])
-            m, _ = self.node.qmemory.measure([mem_pos0, 0])
-            self.node.ports["cout_bob"].tx_output(m)
-            self.send_signal(Signals.SUCCESS)
-            print(f"{self.name}: Signal {Signals.SUCCESS} sent at time {sim_time()}")
+        filtering_ready = False
+        while True:
+            qmemory_ready = self.start_expression
+            evexpr_signal = self.await_signal(sender=self.subprotocols['initprotocol'], signal_label=Signals.SUCCESS)
+            expr = yield qmemory_ready | evexpr_signal
+            if expr.first_term.value:
+                self.start_subprotocols()
+                filtering_ready = True
+            else:
+                mem_pos0 = self.subprotocols['initprotocol'].get_signal_result(Signals.SUCCESS, self)
+                print(f"Init qubit position is {mem_pos0}")
+                qubit_initialised = True
+            if qubit_initialised and filtering_ready:
+                print(f"Starting {self.name} protocol.")
+                self.node.qmemory.operate(ns.CNOT, [mem_pos0, 0])
+                self.node.qmemory.operate(ns.H, [mem_pos0])
+                m, _ = self.node.qmemory.measure([mem_pos0, 0])
+                self.node.ports["cout_bob"].tx_output(m)
+                print(m)
+                self.send_signal(Signals.SUCCESS)
+                print(f"{self.name}: Signal {Signals.SUCCESS} sent at time {sim_time()}")
 
 
 class CorrectionProtocol(NodeProtocol): #@Bob
     def __init__(self, node, name, start_expression=None):
         super().__init__(node, name)
         self.start_expression = start_expression
+        if start_expression is not None and not isinstance(start_expression, EventExpression):
+            raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(start_expression)))
 
     def run(self):
-        entanglement_ready = False
+        port_alice = self.node.ports["cin_alice"]
+        filtering_ready = False
         meas_results = None
-        if self.start_expression is not None:
-            yield self.start_expression
+        while True:
+            qmemory_ready = self.start_expression
+            yield qmemory_ready
             print(f"Starting {self.name} protocol.")
-            self.send_signal(Signals.SUCCESS)
-            print(f"{self.name}: Signal {Signals.SUCCESS} sent at time {sim_time()}")
+            filtering_ready = True
+            evexpr_port_a = self.await_port_input(port_alice)
+            yield evexpr_port_a
+            meas_results = port_alice.rx_input().items
+            if meas_results is not None and filtering_ready:
+                if meas_results[0]:
+                    self.node.qmemory.operate(ns.Z, 0)
+                if meas_results[1]:
+                    self.node.qmemory.operate(ns.X, 0)
+                fidelity = ns.qubits.fidelity(self.node.qmemory.peek(0)[0], ns.y0, squared=True)
+                self.send_signal(Signals.SUCCESS, fidelity)
+                print(f"{self.name}: Signal {Signals.SUCCESS} sent results: {fidelity} at time {sim_time()}")
 
 class FilteringExample(LocalProtocol):
     r"""Protocol for a complete filtering experiment.
@@ -282,7 +304,6 @@ class FilteringExample(LocalProtocol):
         self._epsilon = epsilon
         self.num_runs = num_runs
         # Initialise sub-protocols
-        print(node_a.get_conn_port(node_b.ID))
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
                                            num_pairs=1, name="entangle_A"))
         self.add_subprotocol(EntangleNodes(node=node_b, role="receiver", input_mem_pos=0,
@@ -320,8 +341,10 @@ class FilteringExample(LocalProtocol):
             yield (self.await_signal(self.subprotocols["teleportation_A"], Signals.SUCCESS) &
                    self.await_signal(self.subprotocols["teleportation_B"], Signals.SUCCESS))
             print(f"Received signal {Signals.SUCCESS} in {self.name} protocol at time {sim_time()}")
-            self.send_signal(Signals.SUCCESS)
-            print(f"{self.name} protocol: {Signals.SUCCESS} sent at time {sim_time()}")
+            fidelity = self.subprotocols["teleportation_B"].get_signal_result(Signals.SUCCESS, self)
+            result = {"fidelity": fidelity,}
+            self.send_signal(Signals.SUCCESS, result)
+            print(f"{self.name} protocol: {Signals.SUCCESS} sent results: {result} at time {sim_time()}")
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1000,
@@ -393,14 +416,26 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
     """
     filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.3) #epsilonでフィルタリングの強度を変更
 
-    return filt_example
+    def record_run(evexpr):
+        # Callback that collects data each run
+        protocol = evexpr.triggered_events[-1].source
+        result = protocol.get_signal_result(Signals.SUCCESS)
+        return {"F2": result["fidelity"]}
+
+    dc = DataCollector(record_run, include_time_stamp=False,
+                       include_entity_name=False)
+    dc.collect_on(pd.EventExpression(source=filt_example,
+                                     event_type=Signals.SUCCESS.value))
+    
+    return filt_example, dc
 
 
 if __name__ == "__main__":
     network = example_network_setup()
-    filt_example = example_sim_setup(network.get_node("node_A"),
+    filt_example, dc = example_sim_setup(network.get_node("node_A"),
                                          network.get_node("node_B"),
-                                         num_runs=1)
+                                         num_runs=2)
     filt_example.start()
     ns.sim_run()
-    print("Simulation done!!")
+    print("Average fidelity of generated entanglement with filtering: {}".format(
+        dc.dataframe["F2"].mean()))
