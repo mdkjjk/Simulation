@@ -86,13 +86,6 @@ class InitStateProtocol(NodeProtocol):
         self.node.qmemory.operate(ns.S, mem_pos)
         self.send_signal(signal_label=Signals.SUCCESS, result=mem_pos)
 
-expression_and = yield expression1 & expression2  
-expression_or = yield expression3 | expression4 
-
-expression_or.first_term.value  # Is true if expression3 was triggered  
-expression_or.second_term.value  # Is true if expression4 was triggered  
-# list of all events that caused the expression to trigger:
-expression_or.triggered_events   
 
 from pydynaa import EventExpression
 
