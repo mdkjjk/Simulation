@@ -545,6 +545,50 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
+class DistilExample(LocalProtocol):
+    def __init__(self, node_a, node_b, num_runs):
+        super().__init__(nodes={"A": node_a, "B": node_b}, name="Distil example")
+        self.num_runs = num_runs
+        self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
+                                           num_pairs=1, name="entangle_A"))
+        self.add_subprotocol(
+            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
+                          name="entangle_B"))
+        self.add_subprotocol(Distil(node_a, node_a.get_conn_port(node_b.ID), role="A", name="purify_A"))
+        self.add_subprotocol(Distil(node_b, node_b.get_conn_port(node_a.ID), role="B", name="purify_B"))
+        self.subprotocols["purify_A"].start_expression = (
+            self.subprotocols["purify_A"].await_signal(self.subprotocols["entangle_A"],
+                                                       Signals.SUCCESS))
+        self.subprotocols["purify_B"].start_expression = (
+            self.subprotocols["purify_B"].await_signal(self.subprotocols["entangle_B"],
+                                                       Signals.SUCCESS))
+        start_expr_ent_A = (self.subprotocols["entangle_A"].await_signal(
+                            self.subprotocols["purify_A"], Signals.FAIL) |
+                            self.subprotocols["entangle_A"].await_signal(
+                                self, Signals.WAITING))
+        self.subprotocols["entangle_A"].start_expression = start_expr_ent_A
+
+    def run(self):
+        self.start_subprotocols()
+        for i in range(self.num_runs):
+            start_time = sim_time()
+            self.subprotocols["entangle_A"].entangled_pairs = 0
+            self.send_signal(Signals.WAITING)
+            yield (self.await_signal(self.subprotocols["purify_A"], Signals.SUCCESS) &
+                   self.await_signal(self.subprotocols["purify_B"], Signals.SUCCESS))
+            signal_A = self.subprotocols["purify_A"].get_signal_result(Signals.SUCCESS,
+                                                                       self)
+            signal_B = self.subprotocols["purify_B"].get_signal_result(Signals.SUCCESS,
+                                                                       self)
+            result = {
+                "pos_A": signal_A,
+                "pos_B": signal_B,
+                "time": sim_time() - start_time,
+                "pairs": self.subprotocols["entangle_A"].entangled_pairs,
+            }
+            self.send_signal(Signals.SUCCESS, result)
+
+
 def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1000,
                           node_distance=20):
     """Create an example network for use with the purification protocols.
@@ -610,7 +654,7 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
         Dataframe of collected data.
 
     """
-    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
+    filt_example = DistilExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
 
     def record_run(evexpr):
         # Callback that collects data each run
