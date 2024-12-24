@@ -367,7 +367,6 @@ class Distil(NodeProtocol):
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
-                print(f"Starting {self.name} protocol.")
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
@@ -399,7 +398,6 @@ class Distil(NodeProtocol):
             assert memory_position != self._qmem_positions[0]
             self._qmem_positions[1] = memory_position
             self._waiting_on_second_qubit = False
-            print(f"{self.name} second qubit received.")
             yield from self._node_do_DEJMPS()
         else:
             # New candidate for first qubit arrived
@@ -435,12 +433,10 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
-                print(f"{self.name} protocol: {Signals.SUCCESS} sent at time {sim_time()}")
             else:
                 # FAILURE
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
-                print(f"{self.name} protocol: {Signals.FAIL} sent at time {sim_time()}")
             self.local_meas_result = None
             self.remote_meas_result = None
             self._qmem_positions = [None, None]
@@ -549,56 +545,6 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-class DistilExample(LocalProtocol):
-    def __init__(self, node_a, node_b, num_runs):
-        super().__init__(nodes={"A": node_a, "B": node_b}, name="Distil example")
-        self.num_runs = num_runs
-        self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
-<<<<<<< HEAD
-                                           num_pairs=2, name="entangle_A"))
-        self.add_subprotocol(
-            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
-=======
-                                           num_pairs=1, name="entangle_A"))
-        self.add_subprotocol(
-            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
->>>>>>> 50a9a981fe59217897e4cd23d95a4b5575414b6a
-                          name="entangle_B"))
-        self.add_subprotocol(Distil(node_a, node_a.get_conn_port(node_b.ID), role="A", name="purify_A"))
-        self.add_subprotocol(Distil(node_b, node_b.get_conn_port(node_a.ID), role="B", name="purify_B"))
-        self.subprotocols["purify_A"].start_expression = (
-            self.subprotocols["purify_A"].await_signal(self.subprotocols["entangle_A"],
-                                                       Signals.SUCCESS))
-        self.subprotocols["purify_B"].start_expression = (
-            self.subprotocols["purify_B"].await_signal(self.subprotocols["entangle_B"],
-                                                       Signals.SUCCESS))
-        start_expr_ent_A = (self.subprotocols["entangle_A"].await_signal(
-                            self.subprotocols["purify_A"], Signals.FAIL) |
-                            self.subprotocols["entangle_A"].await_signal(
-                                self, Signals.WAITING))
-        self.subprotocols["entangle_A"].start_expression = start_expr_ent_A
-
-    def run(self):
-        self.start_subprotocols()
-        for i in range(self.num_runs):
-            start_time = sim_time()
-            self.subprotocols["entangle_A"].entangled_pairs = 0
-            self.send_signal(Signals.WAITING)
-            yield (self.await_signal(self.subprotocols["purify_A"], Signals.SUCCESS) &
-                   self.await_signal(self.subprotocols["purify_B"], Signals.SUCCESS))
-            signal_A = self.subprotocols["purify_A"].get_signal_result(Signals.SUCCESS,
-                                                                       self)
-            signal_B = self.subprotocols["purify_B"].get_signal_result(Signals.SUCCESS,
-                                                                       self)
-            result = {
-                "pos_A": signal_A,
-                "pos_B": signal_B,
-                "time": sim_time() - start_time,
-                "pairs": self.subprotocols["entangle_A"].entangled_pairs,
-            }
-            self.send_signal(Signals.SUCCESS, result)
-
-
 def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1000,
                           node_distance=20):
     """Create an example network for use with the purification protocols.
@@ -664,11 +610,7 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
         Dataframe of collected data.
 
     """
-<<<<<<< HEAD
-    filt_example = DistilExample(node_a, node_b, num_runs=num_runs)
-=======
-    filt_example = DistilExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
->>>>>>> 50a9a981fe59217897e4cd23d95a4b5575414b6a
+    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.1)
 
     def record_run(evexpr):
         # Callback that collects data each run
@@ -691,7 +633,7 @@ if __name__ == "__main__":
     network = example_network_setup()
     filt_example, dc = example_sim_setup(network.get_node("node_A"),
                                          network.get_node("node_B"),
-                                         num_runs=1)
+                                         num_runs=1000)
     filt_example.start()
     ns.sim_run()
     print("Average fidelity of generated entanglement with filtering: {}".format(
