@@ -554,9 +554,15 @@ class DistilExample(LocalProtocol):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="Distil example")
         self.num_runs = num_runs
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
+<<<<<<< HEAD
                                            num_pairs=2, name="entangle_A"))
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
+=======
+                                           num_pairs=1, name="entangle_A"))
+        self.add_subprotocol(
+            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
+>>>>>>> 50a9a981fe59217897e4cd23d95a4b5575414b6a
                           name="entangle_B"))
         self.add_subprotocol(Distil(node_a, node_a.get_conn_port(node_b.ID), role="A", name="purify_A"))
         self.add_subprotocol(Distil(node_b, node_b.get_conn_port(node_a.ID), role="B", name="purify_B"))
@@ -658,7 +664,11 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
         Dataframe of collected data.
 
     """
+<<<<<<< HEAD
     filt_example = DistilExample(node_a, node_b, num_runs=num_runs)
+=======
+    filt_example = DistilExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
+>>>>>>> 50a9a981fe59217897e4cd23d95a4b5575414b6a
 
     def record_run(evexpr):
         # Callback that collects data each run
