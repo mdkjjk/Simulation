@@ -367,6 +367,7 @@ class Distil(NodeProtocol):
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
+                print(f"Starting {self.name} protocol.")
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
@@ -398,6 +399,7 @@ class Distil(NodeProtocol):
             assert memory_position != self._qmem_positions[0]
             self._qmem_positions[1] = memory_position
             self._waiting_on_second_qubit = False
+            print(f"{self.name} second qubit received.")
             yield from self._node_do_DEJMPS()
         else:
             # New candidate for first qubit arrived
@@ -433,10 +435,12 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
+                print(f"{self.name} protocol: {Signals.SUCCESS} sent at time {sim_time()}")
             else:
                 # FAILURE
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
+                print(f"{self.name} protocol: {Signals.FAIL} sent at time {sim_time()}")
             self.local_meas_result = None
             self.remote_meas_result = None
             self._qmem_positions = [None, None]
@@ -550,9 +554,9 @@ class DistilExample(LocalProtocol):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="Distil example")
         self.num_runs = num_runs
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
-                                           num_pairs=1, name="entangle_A"))
+                                           num_pairs=2, name="entangle_A"))
         self.add_subprotocol(
-            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
+            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
                           name="entangle_B"))
         self.add_subprotocol(Distil(node_a, node_a.get_conn_port(node_b.ID), role="A", name="purify_A"))
         self.add_subprotocol(Distil(node_b, node_b.get_conn_port(node_a.ID), role="B", name="purify_B"))
@@ -677,7 +681,7 @@ if __name__ == "__main__":
     network = example_network_setup()
     filt_example, dc = example_sim_setup(network.get_node("node_A"),
                                          network.get_node("node_B"),
-                                         num_runs=1000)
+                                         num_runs=1)
     filt_example.start()
     ns.sim_run()
     print("Average fidelity of generated entanglement with filtering: {}".format(
