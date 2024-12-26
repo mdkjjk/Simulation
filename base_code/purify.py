@@ -610,7 +610,7 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
         Dataframe of collected data.
 
     """
-    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
+    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.1)
 
     def record_run(evexpr):
         # Callback that collects data each run
