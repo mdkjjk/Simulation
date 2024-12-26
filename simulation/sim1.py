@@ -1,30 +1,32 @@
+#量子テレポーテーション
+
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
 
+import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
+from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
+from netsquid.components.component import Message, Port
+from netsquid.components.qsource import QSource, SourceStatus
+from netsquid.components.qprocessor import QuantumProcessor
+from netsquid.components.qprogram import QuantumProgram
+from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayModel
+from netsquid.components.models import DepolarNoiseModel
 from netsquid.util.simtools import sim_time
 from netsquid.util.datacollector import DataCollector
 from netsquid.qubits.ketutil import outerprod
 from netsquid.qubits.ketstates import s0, s1
 from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
-from netsquid.protocols.nodeprotocols import NodeProtocol, LocalProtocol
-from netsquid.protocols.protocol import Signals
-import netsquid.components.instructions as instr
-from netsquid.nodes.node import Node
-from netsquid.nodes.network import Network
-from netsquid.examples.entanglenodes import EntangleNodes
-from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
-from netsquid.components.component import Message, Port
-from netsquid.components.qsource import QSource, SourceStatus
-from netsquid.components.qprocessor import QuantumProcessor
-from netsquid.components.qprogram import QuantumProgram
 from netsquid.qubits import ketstates as ks
 from netsquid.qubits.state_sampler import StateSampler
-from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayModel
-from netsquid.components.models import DepolarNoiseModel
+from netsquid.protocols.nodeprotocols import NodeProtocol, LocalProtocol
+from netsquid.protocols.protocol import Signals
+from netsquid.nodes.node import Node
+from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
+from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
 class Example(LocalProtocol):
@@ -51,7 +53,6 @@ class Example(LocalProtocol):
         print(f"Starting {self.name} protocol.")
         self.start_subprotocols()
         for i in range(self.num_runs):
-            start_time = sim_time()
             self.subprotocols["entangle_A"].entangled_pairs = 0
             self.send_signal(Signals.WAITING)
             yield (self.await_signal(self.subprotocols["entangle_A"], Signals.SUCCESS) &
@@ -79,12 +80,10 @@ class InitStateProtocol(NodeProtocol): #@Alice
 
 #Aliceの持つ2つの量子ビットを測定
 class BellMeasurementProtocol(NodeProtocol): #@Alice
-    def __init__(self, node, qubit_protocol, start_expression=None, mem_pos0=None, mem_pos1=None, name=None):
+    def __init__(self, node, qubit_protocol, start_expression=None, name=None):
         super().__init__(node=node, name=name)
         self.add_subprotocol(qubit_protocol, 'initprotocol')
         self.start_expression = start_expression
-        self.mem_pos0 = mem_pos0
-        self.mem_pos1 = mem_pos1
 
     def run(self):
         print(f"Starting {self.name} protocol.")
@@ -118,7 +117,6 @@ class BellMeasurementProtocol(NodeProtocol): #@Alice
 
     def start(self):
         super().start()
-        self.start_subprotocols()
 
 class CorrectionProtocol(NodeProtocol): #@Bob
     def __init__(self, node, start_expression=None, mem_pos=None, name=None):
