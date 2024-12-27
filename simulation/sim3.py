@@ -108,7 +108,6 @@ class Distil(NodeProtocol):
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
-                print(f"Starting {self.name} protocol.")
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
@@ -140,7 +139,6 @@ class Distil(NodeProtocol):
             assert memory_position != self._qmem_positions[0]
             self._qmem_positions[1] = memory_position
             self._waiting_on_second_qubit = False
-            print(f"{self.name} second qubit received.")
             yield from self._node_do_DEJMPS()
         else:
             # New candidate for first qubit arrived
@@ -176,12 +174,10 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
-                print(f"{self.name} protocol: {Signals.SUCCESS} sent at time {sim_time()}")
             else:
                 # FAILURE
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
-                print(f"{self.name} protocol: {Signals.FAIL} sent at time {sim_time()}")
             self.local_meas_result = None
             self.remote_meas_result = None
             self._qmem_positions = [None, None]
@@ -243,7 +239,7 @@ class DistilExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
                           node_distance=20):
     """Create an example network for use with the purification protocols.
 
@@ -282,7 +278,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     network.add_connection(node_a, node_b, connection=conn_cchannel)
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
-                              models={"quantum_loss_model": None,
+                              models={"quantum_noise_model": DepolarNoiseModel(4000),
                                       "delay_model": FibreDelayModel(c=200e3)},
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
@@ -334,5 +330,5 @@ if __name__ == "__main__":
                                          num_runs=1000)
     filt_example.start()
     ns.sim_run()
-    print("Average fidelity of generated entanglement with filtering: {}".format(
+    print("Average fidelity of generated entanglement with distil: {}".format(
         dc.dataframe["F2"].mean()))

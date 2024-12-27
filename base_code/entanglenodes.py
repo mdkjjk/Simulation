@@ -107,6 +107,7 @@ Fidelity of generated entanglement: 0.99999...
 
 """
 import netsquid as ns
+from netsquid.util.simtools import sim_time
 from netsquid.protocols.nodeprotocols import NodeProtocol
 from netsquid.protocols.protocol import Signals
 from netsquid.components.instructions import INSTR_SWAP
@@ -147,19 +148,18 @@ class EntangleNodes(NodeProtocol):
     """
 
     def __init__(self, node, role, start_expression=None, input_mem_pos=0, num_pairs=1, name=None):
-        if role.lower() not in ["source", "receiver"]: #roleが"source", "receiver"以外ならエラー
+        if role.lower() not in ["source", "receiver"]:
             raise ValueError
         self._is_source = role.lower() == "source"
-        name = name if name else "EntangleNode({}, {})".format(node.name, role) #nameにデフォルト値を設定
+        name = name if name else "EntangleNode({}, {})".format(node.name, role)
         super().__init__(node=node, name=name)
-        #start_expressionがEventExpressionの型じゃない場合、エラー
         if start_expression is not None and not isinstance(start_expression, EventExpression):
             raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(start_expression)))
         self.start_expression = start_expression
         self._num_pairs = num_pairs
         self._mem_positions = None
         # Claim input memory position:
-        if self.node.qmemory is None: #量子メモリが割り当てられてない場合、エラー
+        if self.node.qmemory is None:
             raise ValueError("Node {} does not have a quantum memory assigned.".format(self.node))
         self._input_mem_pos = input_mem_pos
         self._qmem_input_port = self.node.qmemory.ports["qin{}".format(self._input_mem_pos)]
@@ -168,7 +168,7 @@ class EntangleNodes(NodeProtocol):
     def start(self):
         self.entangled_pairs = 0  # counter
         self._mem_positions = [self._input_mem_pos]
-        # Claim extra memory positions to use (if any):　余分なメモリポジションが存在する場合
+        # Claim extra memory positions to use (if any):
         extra_memory = self._num_pairs - 1
         if extra_memory > 0:
             unused_positions = self.node.qmemory.unused_positions
@@ -179,10 +179,10 @@ class EntangleNodes(NodeProtocol):
                 self._mem_positions.append(i)
                 self.node.qmemory.mem_positions[i].in_use = True
         # Call parent start method
-        return super().start() #親クラスのstartはどれ？？？ => Protocolクラスのstartメソッド
+        return super().start()
 
     def stop(self):
-        # Unclaim used memory positions:　使用済みのメモリポジションを破棄
+        # Unclaim used memory positions:
         if self._mem_positions:
             for i in self._mem_positions[1:]:
                 self.node.qmemory.mem_positions[i].in_use = False
@@ -195,7 +195,6 @@ class EntangleNodes(NodeProtocol):
             if self.start_expression is not None:
                 yield self.start_expression
             elif self._is_source and self.entangled_pairs >= self._num_pairs:
-                #self._is_sourceがNoneでなく、エンタングルペアが1以上の時 => 終了
                 # If no start expression specified then limit generation to one round
                 break
             for mem_pos in self._mem_positions[::-1]:
