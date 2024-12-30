@@ -43,7 +43,6 @@ class Example(LocalProtocol):
         # Set start expressions
         self.subprotocols["entangle_A"].start_expression = self.subprotocols["entangle_A"].await_signal(self, Signals.WAITING)
         self.subprotocols["teleport_A"].start_expression = self.subprotocols["teleport_A"].await_signal(self.subprotocols["entangle_A"], Signals.SUCCESS)
-        self.subprotocols["teleport_B"].start_expression = self.subprotocols["teleport_B"].await_signal(self.subprotocols["entangle_B"], Signals.SUCCESS)
 
     def run(self):
         self.start_subprotocols()
@@ -125,9 +124,8 @@ class BellMeasurement(NodeProtocol):
 
 
 class Correction(NodeProtocol):
-    def __init__(self, node, start_expression=None, name=None):
+    def __init__(self, node, name=None):
         super().__init__(node, name)
-        self.start_expression = start_expression
         self._qmem_pos = None
 
     def run(self):
