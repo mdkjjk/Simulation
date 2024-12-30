@@ -237,7 +237,6 @@ class Correction(NodeProtocol):
 
     def run(self):
         port_alice = self.node.ports["cin_alice"]
-        port_charlie = self.node.ports["qin_charlie"]
         entanglement_ready = False
         meas_results = None
         while True:
