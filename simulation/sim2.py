@@ -359,8 +359,8 @@ class FilteringExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=100,
-                          node_distance=20):
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
+                          node_distance=30):
     network = Network("network")
 
     node_a, node_b = network.add_nodes(["node_A", "node_B"])
@@ -386,7 +386,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     network.add_connection(node_a, node_b, connection=conn_cchannel, port_name_node1="cout_bob", port_name_node2="cin_alice")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
-                              models={"quantum_noise_model": DepolarNoiseModel(5000),
+                              models={"quantum_noise_model": DepolarNoiseModel(2500),
                                       "delay_model": FibreDelayModel(c=200e3)},
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
@@ -401,7 +401,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     return network
 
 
-def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
+def example_sim_setup(node_a, node_b, num_runs):
     """Example simulation setup for purification protocols.
 
     Returns
@@ -412,7 +412,7 @@ def example_sim_setup(node_a, node_b, num_runs, epsilon=0.3):
         Dataframe of collected data.
 
     """
-    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.8)
+    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.7)
 
     def record_run(evexpr):
         # Callback that collects data each run
