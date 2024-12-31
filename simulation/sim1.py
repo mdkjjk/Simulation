@@ -156,7 +156,7 @@ class Correction(NodeProtocol):
                 meas_results = None
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=100,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=100,
                           node_distance=20):
     network = Network("network")
 
