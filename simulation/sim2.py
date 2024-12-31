@@ -244,6 +244,9 @@ class Correction(NodeProtocol):
             expr_signal = self.start_expression
             yield expr_signal
             entanglement_ready = True
+            source_protocol = expr_signal.atomic_source
+            ready_signal = source_protocol.get_signal_by_event(event=expr_signal.triggered_events[0], receiver=self)
+            self._qmem_pos = ready_signal.result
             #print(f"{self.name}: Entanglement received")
             evexpr_port_a = self.await_port_input(port_alice)
             yield evexpr_port_a
@@ -252,10 +255,10 @@ class Correction(NodeProtocol):
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
-                    self.node.qmemory.execute_instruction(instr.INSTR_Z)
+                    self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
                 if meas_results[1] == 0:
-                    self.node.qmemory.execute_instruction(instr.INSTR_X)
-                self.send_signal(Signals.SUCCESS, 0)
+                    self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
+                self.send_signal(Signals.SUCCESS, self._qmem_pos)
                 #print(f"{self.name}: Teleport success")
                 entanglement_ready = False
                 meas_results = None
