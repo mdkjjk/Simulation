@@ -93,8 +93,9 @@ class Distil(NodeProtocol):
     def run(self):
         cchannel_ready = self.await_port_input(self.port)
         qmemory_ready = self.start_expression
+        self.signal = False
         while True:
-            #print(f"{self.name}: Start")
+            print(f"{self.name}: Start")
             # self.send_signal(Signals.WAITING)
             expr = yield cchannel_ready | qmemory_ready
             # self.send_signal(Signals.BUSY)
@@ -103,10 +104,14 @@ class Distil(NodeProtocol):
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
+                if self.signal == True:
+                    continue
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
-                #print(f"{self.name}: entanglement received at {ready_signal.result}")
+                if ready_signal.result == False:
+                    self.signal = False
+                print(f"{self.name}: entanglement received at {ready_signal.result}")
                 yield from self._handle_new_qubit(ready_signal.result)
             self._check_success()
 
@@ -163,8 +168,8 @@ class Distil(NodeProtocol):
         # We perform local DEJMPS
         yield self.node.qmemory.execute_program(self._program, [pos1, pos2])  # If instruction not instant
         self.local_meas_result = self._program.output["m"][0]
-        is_empty0 = self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
-        is_empty1 = self.node.qmemory.mem_positions[self._qmem_positions[1]].is_empty
+        #is_empty0 = self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
+        #is_empty1 = self.node.qmemory.mem_positions[self._qmem_positions[1]].is_empty
         #print(f"{self.name}: mem_pos0 = {is_empty1}, mem_pos1 = {is_empty0}")
         self._qmem_positions[1] = None
         #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
@@ -180,12 +185,14 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
-                #print(f"{self.name}: SUCCESS! mem_pos = {self._qmem_positions[0]}")
+                print(f"{self.name}: SUCCESS! mem_pos = {self._qmem_positions[0]}")
+                self.signal = True
             else:
                 # FAILURE
-                #print(f"{self.name}: FAIL!")
+                print(f"{self.name}: FAIL!")
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
+                self.signal = False
             self.local_meas_result = None
             self.remote_meas_result = None
             self._qmem_positions = [None, None]
@@ -260,23 +267,26 @@ class Filter(NodeProtocol):
         self.meas_ops = [m0, m1]
 
     def run(self):
-        cchannel_ready = self.await_port_input(self.port)
-        qmemory_ready = self.start_expression
         while True:
-            # self.send_signal(Signals.WAITING)
-            expr = yield cchannel_ready | qmemory_ready
-            # self.send_signal(Signals.BUSY)
-            if expr.first_term.value:
+            print(f"{self.name}: Start")
+            qmemory_ready = self.start_expression
+            yield qmemory_ready
+            cchannel_ready = self.await_port_input(self.port)
+            if qmemory_ready.value:
+                source_protocol = qmemory_ready.atomic_source
+                ready_signal = source_protocol.get_signal_by_event(
+                    event=qmemory_ready.triggered_events[0], receiver=self)
+                self._qmem_pos = ready_signal.result
+                print(f"{self.name}: entanglement received at {self._qmem_pos}")
+                yield from self._handle_qubit_rx()
+            yield cchannel_ready
+            print(f"{self.name}: run")
+            if cchannel_ready.value:
                 classical_message = self.port.rx_input(header=self.header)
+                print(f"{self.name}: received message with {classical_message}")
                 if classical_message:
                     self.remote_qcount, self.remote_meas_OK = classical_message.items
                     self._handle_cchannel_rx()
-            elif expr.second_term.value:
-                source_protocol = expr.second_term.atomic_source
-                ready_signal = source_protocol.get_signal_by_event(
-                    event=expr.second_term.triggered_events[0], receiver=self)
-                self._qmem_pos = ready_signal.result
-                yield from self._handle_qubit_rx()
 
     # TODO does start reset vars?
     def start(self):
@@ -320,14 +330,18 @@ class Filter(NodeProtocol):
         if (self.local_qcount > 0 and self.local_qcount == self.remote_qcount and
                 self.local_meas_OK and self.remote_meas_OK):
             # SUCCESS!
+            print(f"{self.name}: SUCCESS! mem_pos = {self._qmem_pos}")
             self.send_signal(Signals.SUCCESS, self._qmem_pos)
         elif self.local_meas_OK and self.local_qcount > self.remote_qcount:
             # Need to wait for latest remote status
             pass
+            print(f"{self.name}: _check_success")
         else:
             # FAILURE
+            print(f"{self.name}: FAIL")
             self._handle_fail()
-            self.send_signal(Signals.FAIL, self.local_qcount)
+            signal = False
+            self.send_signal(Signals.FAIL, signal)
 
     def _handle_fail(self):
         if self.node.qmemory.mem_positions[self._qmem_pos].in_use:
@@ -346,99 +360,6 @@ class Filter(NodeProtocol):
         return True
 
 
-class InitStateProgram(QuantumProgram):
-    default_num_qubits = 1
-
-    def program(self):
-        q1, = self.get_qubit_indices(1)
-        self.apply(instr.INSTR_INIT, q1)
-        self.apply(instr.INSTR_H, q1)
-        self.apply(instr.INSTR_S, q1)
-        yield self.run()
-
-
-class BellMeasurement(NodeProtocol):
-    def __init__(self, node, port, name=None):
-        super().__init__(node, name)
-        self.port = port
-        self._qmem_pos0 = None
-        self._qmem_pos1 = None
-
-    def start(self):
-        super().start()
-        if self.start_expression is not None and not isinstance(self.start_expression, EventExpression):
-            raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(self.start_expression)))
-
-    def run(self):
-        qubit_initialised = False
-        entanglement_ready = False
-        qubit_init_program = InitStateProgram()
-        while True:
-            #print(f"{self.name}: Start")
-            expr_port = self.start_expression
-            yield expr_port
-            entanglement_ready = True
-            source_protocol = expr_port.atomic_source
-            ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
-            self._qmem_pos1 = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos1}")
-            while not self.node.qmemory.unused_positions:
-                yield self.await_timer(1)
-            self._qmem_pos0 = self.node.qmemory.unused_positions[0]
-            self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
-            expr_signal = self.await_program(self.node.qmemory)
-            yield expr_signal
-            qubit_initialised = True
-            #print(f"{self.name}: Initqubit received at {self._qmem_pos0}")
-            if qubit_initialised and entanglement_ready:
-                self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
-                self.node.qmemory.operate(ns.H, self._qmem_pos0)
-                m, _ = self.node.qmemory.measure([self._qmem_pos0, self._qmem_pos1])
-                # Send measurement results to Bob:
-                self.port.tx_output(m)
-                result = {"pos_A0": self._qmem_pos0,
-                          "pos_A1": self._qmem_pos1,}
-                self.send_signal(Signals.SUCCESS, result)
-                #print(f"{self.name}: Finish")
-                qubit_initialised = False
-                entanglement_ready = False
-
-
-class Correction(NodeProtocol):
-    def __init__(self, node, start_expression=None, name=None):
-        super().__init__(node, name)
-        self.start_expression = start_expression
-        self._qmem_pos = None
-
-    def run(self):
-        port_alice = self.node.ports["cin_alice"]
-        entanglement_ready = False
-        meas_results = None
-        while True:
-            #print(f"{self.name}: Start")
-            expr_signal = self.start_expression
-            yield expr_signal
-            entanglement_ready = True
-            source_protocol = expr_signal.atomic_source
-            ready_signal = source_protocol.get_signal_by_event(event=expr_signal.triggered_events[0], receiver=self)
-            self._qmem_pos = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos}")
-            evexpr_port_a = self.await_port_input(port_alice)
-            yield evexpr_port_a
-            meas_results = port_alice.rx_input().items
-            #print(f"{self.name}: Result received")
-            if meas_results is not None and entanglement_ready:
-                # Do corrections (blocking)
-                if meas_results[0] == 1:
-                    self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
-                if meas_results[1] == 0:
-                    self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
-                self.send_signal(Signals.SUCCESS, self._qmem_pos)
-                #print(f"{self.name}: Teleport success")
-                entanglement_ready = False
-                meas_results = None
-
-
 class PurifyExample(LocalProtocol):
     def __init__(self, node_a, node_b, num_runs, epsilon=0.7):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="Purify example")
@@ -450,15 +371,19 @@ class PurifyExample(LocalProtocol):
                           name="entangle_B"))
         self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob"], role="A", name="distil_A"))
         self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice"], role="B", name="distil_B"))
-        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob"],epsilon=epsilon, name="filter_A"))
-        self.add_subprotocol(Filter(node_a, node_b.ports["cin_alice"],epsilon=epsilon, name="filter_B"))
-        self.add_subprotocol(BellMeasurement(node=node_a, port=node_a.ports["cout_bob"], name="teleport_A"))
-        self.add_subprotocol(Correction(node=node_b, name="teleport_B"))
+        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob"], epsilon=epsilon, name="filter_A"))
+        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice"], epsilon=epsilon, name="filter_B"))
         self.subprotocols["distil_A"].start_expression = (
             self.subprotocols["distil_A"].await_signal(self.subprotocols["entangle_A"],
                                                        Signals.SUCCESS))
         self.subprotocols["distil_B"].start_expression = (
             self.subprotocols["distil_B"].await_signal(self.subprotocols["entangle_B"],
+                                                       Signals.SUCCESS))
+        self.subprotocols["filter_A"].start_expression = (
+            self.subprotocols["filter_A"].await_signal(self.subprotocols["distil_A"],
+                                                       Signals.SUCCESS))
+        self.subprotocols["filter_B"].start_expression = (
+            self.subprotocols["filter_B"].await_signal(self.subprotocols["distil_B"],
                                                        Signals.SUCCESS))
         start_expr_ent_A = (self.subprotocols["entangle_A"].await_signal(
                             self.subprotocols["distil_A"], Signals.FAIL) |
@@ -467,31 +392,28 @@ class PurifyExample(LocalProtocol):
                             self.subprotocols["entangle_A"].await_signal(
                                 self, Signals.WAITING))
         self.subprotocols["entangle_A"].start_expression = start_expr_ent_A
-        self.subprotocols["teleport_A"].start_expression = self.subprotocols["teleport_A"].await_signal(self.subprotocols["purify_A"], Signals.SUCCESS)
-        self.subprotocols["teleport_B"].start_expression = self.subprotocols["teleport_B"].await_signal(self.subprotocols["purify_B"], Signals.SUCCESS)
 
     def run(self):
         self.start_subprotocols()
         for i in range(self.num_runs):
-            #print(f"Simulation {i}: Start")
+            print(f"Simulation {i}: Start")
             start_time = sim_time()
             self.subprotocols["entangle_A"].entangled_pairs = 0
             self.send_signal(Signals.WAITING)
-            yield (self.await_signal(self.subprotocols["teleport_A"], Signals.SUCCESS) &
-                   self.await_signal(self.subprotocols["teleport_B"], Signals.SUCCESS))
-            signal_A = self.subprotocols["teleport_A"].get_signal_result(Signals.SUCCESS,
+            yield (self.await_signal(self.subprotocols["filter_A"], Signals.SUCCESS) &
+                   self.await_signal(self.subprotocols["filter_B"], Signals.SUCCESS))
+            signal_A = self.subprotocols["filter_A"].get_signal_result(Signals.SUCCESS,
                                                                        self)
-            signal_B = self.subprotocols["teleport_B"].get_signal_result(Signals.SUCCESS,
+            signal_B = self.subprotocols["filter_B"].get_signal_result(Signals.SUCCESS,
                                                                        self)
             result = {
-                "pos_A0": signal_A["pos_A0"],
-                "pos_A1": signal_A["pos_A1"],
+                "pos_A": signal_A,
                 "pos_B": signal_B,
                 "time": sim_time() - start_time,
                 "pairs": self.subprotocols["entangle_A"].entangled_pairs,
             }
             self.send_signal(Signals.SUCCESS, result)
-            #print(f"Simulation {i}: Finish")
+            print(f"Simulation {i}: Finish")
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
@@ -554,10 +476,9 @@ def example_sim_setup(node_a, node_b, num_runs):
         protocol = evexpr.triggered_events[-1].source
         result = protocol.get_signal_result(Signals.SUCCESS)
         # Record fidelity
-        node_a.qmemory.pop(positions=[result["pos_A0"]])
-        node_a.qmemory.pop(positions=[result["pos_A1"]])
+        q_A, = node_a.qmemory.pop(positions=[result["pos_A"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
-        f2 = qapi.fidelity(q_B, ks.y0, squared=True)
+        f2 = qapi.fidelity([q_A, q_B], ks.b01, squared=True)
         return {"F2": f2, "pairs": result["pairs"], "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -574,5 +495,5 @@ if __name__ == "__main__":
                                          num_runs=2)
     filt_example.start()
     ns.sim_run()
-    print("Average fidelity of generated entanglement with distil: {}".format(
+    print("Average fidelity of generated entanglement with purification: {}".format(
         dc.dataframe["F2"].mean()))
