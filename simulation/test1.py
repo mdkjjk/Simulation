@@ -146,6 +146,7 @@ def create_plot():
     data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
+    fidelities.to_csv(f"{save_dir}/Entanglement fidelity _{existing_files + 1}.csv")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,9 @@
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
+import pandas
+import matplotlib, os
+from matplotlib import pyplot as plt
 
 import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
@@ -263,7 +266,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_a, node_b = network.add_nodes(["node_A", "node_B"])
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
-        memory_noise_models=DepolarNoiseModel(depolar_rate)))
+        memory_noise_models=DepolarNoiseModel(0)))
     state_sampler = StateSampler(
         [ks.b01, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
@@ -273,7 +276,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
         num_ports=2, status=SourceStatus.EXTERNAL))
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
-        memory_noise_models=DepolarNoiseModel(depolar_rate)))
+        memory_noise_models=DepolarNoiseModel(0)))
     conn_cchannel = DirectConnection(
         "CChannelConn_AB",
         ClassicalChannel("CChannel_A->B", length=node_distance,
@@ -283,7 +286,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     network.add_connection(node_a, node_b, connection=conn_cchannel, port_name_node1="cout_bob", port_name_node2="cin_alice")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
-                              models={"quantum_noise_model": DepolarNoiseModel(2500),
+                              models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
                                       "delay_model": FibreDelayModel(c=200e3)},
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
@@ -328,12 +331,43 @@ def example_sim_setup(node_a, node_b, num_runs):
     return filt_example, dc
 
 
+def run_experiment(depolar_rates):
+    fidelity_data = pandas.DataFrame()
+    for depolar_rate in depolar_rates:
+        ns.sim_reset()
+        network = example_network_setup(depolar_rate=depolar_rate)
+        node_a = network.get_node("node_A")
+        node_b = network.get_node("node_B")
+        example, dc = example_sim_setup(node_a, node_b, 1000)
+        example.start()
+        ns.sim_run()
+        df = dc.dataframe
+        df['depolar_rate'] = depolar_rate
+        fidelity_data = pandas.concat([fidelity_data, df])
+    return fidelity_data
+
+
+def create_plot():
+    matplotlib.use('Agg')
+    depolar_rates = [100 * i for i in range(0, 60, 3)]
+    fidelities = run_experiment(depolar_rates)
+    plot_style = {'kind': 'scatter', 'grid': True,
+                  'title': "Fidelity of entanglement with distil"}
+    data = fidelities.groupby("depolar_rate")['F2'].agg(
+        fidelity='mean', sem='sem').reset_index()
+    save_dir = "./plots"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Entanglement fidelity with distil")])
+    filename = f"{save_dir}/Entanglement fidelity with distil_{existing_files + 1}.png"
+    data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
+    plt.savefig(filename)
+    print(f"Plot saved as {filename}")
+    fidelities.to_csv(f"{save_dir}/Entanglement fidelity with distil_{existing_files + 1}.csv")
+
+
 if __name__ == "__main__":
-    network = example_network_setup()
-    filt_example, dc = example_sim_setup(network.get_node("node_A"),
-                                         network.get_node("node_B"),
-                                         num_runs=1000)
-    filt_example.start()
-    ns.sim_run()
-    print("Average fidelity of generated entanglement with distil: {}".format(
-        dc.dataframe["F2"].mean()))
+    #network = example_network_setup()
+    #ilt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
+    #filt_example.start()
+    #ns.sim_run()
+    #print("Average fidelity of generated entanglement with distil: {}".format(dc.dataframe["F2"].mean()))
+    create_plot()
