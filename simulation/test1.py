@@ -1,36 +1,26 @@
 #量子テレポーテーション
 
-import numpy as np
 import netsquid as ns
 import pydynaa as pd
 import pandas
 import matplotlib, os
 from matplotlib import pyplot as plt
 
-import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
-from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
-from netsquid.components.component import Message, Port
 from netsquid.components.qsource import QSource, SourceStatus
 from netsquid.components.qprocessor import QuantumProcessor
-from netsquid.components.qprogram import QuantumProgram
 from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayModel
 from netsquid.components.models import DepolarNoiseModel
 from netsquid.util.simtools import sim_time
 from netsquid.util.datacollector import DataCollector
-from netsquid.qubits.ketutil import outerprod
-from netsquid.qubits.ketstates import s0, s1
-from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits import ketstates as ks
 from netsquid.qubits.state_sampler import StateSampler
-from netsquid.protocols.nodeprotocols import NodeProtocol, LocalProtocol
+from netsquid.protocols.nodeprotocols import LocalProtocol
 from netsquid.protocols.protocol import Signals
-from netsquid.nodes.node import Node
 from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
-from pydynaa import EventExpression
 
 class Example(LocalProtocol):
     def __init__(self, node_a, node_b, num_runs):
@@ -41,11 +31,8 @@ class Example(LocalProtocol):
                                            num_pairs=1, name="entangle_A"))
         self.add_subprotocol(EntangleNodes(node=node_b, role="receiver", input_mem_pos=0,
                                            num_pairs=1, name="entangle_B"))
-        self.add_subprotocol(BellMeasurement(node=node_a, port=node_a.ports["cout_bob"], name="teleport_A"))
-        self.add_subprotocol(Correction(node=node_b, name="teleport_B"))
         # Set start expressions
         self.subprotocols["entangle_A"].start_expression = self.subprotocols["entangle_A"].await_signal(self, Signals.WAITING)
-        self.subprotocols["teleport_A"].start_expression = self.subprotocols["teleport_A"].await_signal(self.subprotocols["entangle_A"], Signals.SUCCESS)
 
     def run(self):
         self.start_subprotocols()
@@ -54,109 +41,17 @@ class Example(LocalProtocol):
             start_time = sim_time()
             self.subprotocols["entangle_A"].entangled_pairs = 0
             self.send_signal(Signals.WAITING)
-            yield (self.await_signal(self.subprotocols["teleport_A"], Signals.SUCCESS) &
-                   self.await_signal(self.subprotocols["teleport_B"], Signals.SUCCESS))
-            resurl_A = self.subprotocols["teleport_A"].get_signal_result(Signals.SUCCESS, self)
-            signal_B = self.subprotocols["teleport_B"].get_signal_result(Signals.SUCCESS, self)
+            yield (self.await_signal(self.subprotocols["entangle_A"], Signals.SUCCESS) &
+                   self.await_signal(self.subprotocols["entangle_B"], Signals.SUCCESS))
+            resurl_A = self.subprotocols["entangle_A"].get_signal_result(Signals.SUCCESS, self)
+            signal_B = self.subprotocols["entangle_B"].get_signal_result(Signals.SUCCESS, self)
             result = {
-                "pos_A0": resurl_A["pos_A0"],
-                "pos_A1": resurl_A["pos_A1"],
+                "pos_A": resurl_A,
                 "pos_B": signal_B,
                 "time": sim_time() - start_time,
             }
             self.send_signal(Signals.SUCCESS, result)
             #print(f"Simulation {i} Finish")
-
-
-class InitStateProgram(QuantumProgram):
-    default_num_qubits = 1
-
-    def program(self):
-        q1, = self.get_qubit_indices(1)
-        self.apply(instr.INSTR_INIT, q1)
-        self.apply(instr.INSTR_H, q1)
-        self.apply(instr.INSTR_S, q1)
-        yield self.run()
-
-
-class BellMeasurement(NodeProtocol):
-    def __init__(self, node, port, name=None):
-        super().__init__(node, name)
-        self.port = port
-        self._qmem_pos0 = None
-        self._qmem_pos1 = None
-
-    def start(self):
-        super().start()
-        if self.start_expression is not None and not isinstance(self.start_expression, EventExpression):
-            raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(self.start_expression)))
-
-    def run(self):
-        qubit_initialised = False
-        entanglement_ready = False
-        qubit_init_program = InitStateProgram()
-        while True:
-            #print(f"{self.name}: Start")
-            expr_port = self.start_expression
-            yield expr_port
-            entanglement_ready = True
-            source_protocol = expr_port.atomic_source
-            ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
-            self._qmem_pos1 = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos1}")
-            while not self.node.qmemory.unused_positions:
-                yield self.await_timer(1)
-            self._qmem_pos0 = self.node.qmemory.unused_positions[0]
-            self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
-            expr_signal = self.await_program(self.node.qmemory)
-            yield expr_signal
-            qubit_initialised = True
-            #print(f"{self.name}: Initqubit received at {self._qmem_pos0}")
-            if qubit_initialised and entanglement_ready:
-                self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
-                self.node.qmemory.operate(ns.H, self._qmem_pos0)
-                m, _ = self.node.qmemory.measure([self._qmem_pos0, self._qmem_pos1])
-                # Send measurement results to Bob:
-                self.port.tx_output(m)
-                result = {"pos_A0": self._qmem_pos0,
-                          "pos_A1": self._qmem_pos1,}
-                self.send_signal(Signals.SUCCESS, result)
-                #print(f"{self.name}: Finish")
-                qubit_initialised = False
-                entanglement_ready = False
-
-
-class Correction(NodeProtocol):
-    def __init__(self, node, name=None):
-        super().__init__(node, name)
-        self._qmem_pos = None
-
-    def run(self):
-        port_alice = self.node.ports["cin_alice"]
-        port_charlie = self.node.ports["qin_charlie"]
-        entanglement_ready = False
-        meas_results = None
-        while True:
-            #print(f"{self.name}: Start")
-            evexpr_port_a = self.await_port_input(port_alice)
-            evexpr_port_c = self.await_port_input(port_charlie)
-            expression = yield evexpr_port_a | evexpr_port_c
-            if expression.first_term.value:
-                meas_results = port_alice.rx_input().items
-                #print(f"{self.name}: Result received")
-            else:
-                entanglement_ready = True
-                #print(f"{self.name}: Entanglement received")
-            if meas_results is not None and entanglement_ready:
-                # Do corrections (blocking)
-                if meas_results[0] == 1:
-                    self.node.qmemory.execute_instruction(instr.INSTR_Z)
-                if meas_results[1] == 0:
-                    self.node.qmemory.execute_instruction(instr.INSTR_X)
-                self.send_signal(Signals.SUCCESS, 0)
-                #print(f"{self.name}: Teleport success")
-                entanglement_ready = False
-                meas_results = None
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
@@ -209,10 +104,9 @@ def example_sim_setup(node_a, node_b, num_runs):
         protocol = evexpr.triggered_events[-1].source
         result = protocol.get_signal_result(Signals.SUCCESS)
         # Record fidelity
-        node_a.qmemory.pop(positions=[result["pos_A0"]])
-        node_a.qmemory.pop(positions=[result["pos_A1"]])
+        q_A, = node_a.qmemory.pop(positions=[result["pos_A"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
-        f2 = qapi.fidelity(q_B, ks.y0, squared=True)
+        f2 = qapi.fidelity([q_A,q_B], ks.b01, squared=True)
         return {"F2": f2, "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -243,12 +137,12 @@ def create_plot():
     depolar_rates = [100 * i for i in range(0, 60, 3)]
     fidelities = run_experiment(depolar_rates)
     plot_style = {'kind': 'scatter', 'grid': True,
-                  'title': "Fidelity of the teleported quantum state"}
+                  'title': "Fidelity of entanglement"}
     data = fidelities.groupby("depolar_rate")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
     save_dir = "./plots"
-    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Teleportation fidelity")])
-    filename = f"{save_dir}/Teleportation fidelity_{existing_files + 1}.png"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Entanglement fidelity")])
+    filename = f"{save_dir}/Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
@@ -259,5 +153,5 @@ if __name__ == "__main__":
     #example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
     #example.start()
     #ns.sim_run()
-    #print("Average fidelity of received qubit: {}".format(dc.dataframe["F2"].mean()))
+    #print("Average fidelity of generated entanglement: {}".format(dc.dataframe["F2"].mean()))
     create_plot()
