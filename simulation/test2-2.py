@@ -141,12 +141,13 @@ class Filter(NodeProtocol):
         return True
 
 
-class RecursiveCall(Filter):
+class RecallFilter(Filter):
     def __init__(self, node, port, start_expression=None, msg_header="filter",
                  epsilon=0.3, iteration=1, name=None):
         super().__init__(node, port, start_expression, msg_header, epsilon, name)
         self.iteration = iteration
         self.attempts = 0
+        print(self.start_expression)
 
     def run(self):
         while self.attempts < self.iteration:
@@ -175,17 +176,11 @@ class FilteringExample(LocalProtocol):
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
                           name="entangle_B"))
-        self.add_subprotocol(RecursiveCall(node_a, node_a.get_conn_port(node_b.ID),
-                                    epsilon=epsilon, iteration=3, name="purify_A"))
-        self.add_subprotocol(RecursiveCall(node_b, node_b.get_conn_port(node_a.ID),
-                                    epsilon=epsilon, iteration=3, name="purify_B"))
+        self.add_subprotocol(Filter(node_a, node_a.get_conn_port(node_b.ID),
+                                    epsilon=epsilon, name="purify_A"))
+        self.add_subprotocol(Filter(node_b, node_b.get_conn_port(node_a.ID),
+                                    epsilon=epsilon, name="purify_B"))
         # Set start expressions
-        self.subprotocols["purify_A"].start_expression = (
-            self.subprotocols["purify_A"].await_signal(self.subprotocols["entangle_A"],
-                                                       Signals.SUCCESS))
-        self.subprotocols["purify_B"].start_expression = (
-            self.subprotocols["purify_B"].await_signal(self.subprotocols["entangle_B"],
-                                                       Signals.SUCCESS))
         start_expr_ent_A = (self.subprotocols["entangle_A"].await_signal(
                             self.subprotocols["purify_A"], Signals.FAIL) |
                             self.subprotocols["entangle_A"].await_signal(
@@ -213,17 +208,24 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-class RecursiveFilteringExample(FilteringExample):
+class RecallFilteringExample(FilteringExample):
     def __init__(self, node_a, node_b, num_runs, epsilon=0.9, iteration=2):
         super().__init__(node_a, node_b, num_runs, epsilon)
-        self.subprotocols["purify_A"] = RecursiveFilter(
+        self.subprotocols["purify_A"] = RecallFilter(
             node_a, node_a.get_conn_port(node_b.ID), epsilon=epsilon,
-            iteration=iteration, name="recursive_purify_A"
+            iteration=iteration, name="recall_purify_A"
         )
-        self.subprotocols["purify_B"] = RecursiveFilter(
+        self.subprotocols["purify_B"] = RecallFilter(
             node_b, node_b.get_conn_port(node_a.ID), epsilon=epsilon,
-            iteration=iteration, name="recursive_purify_B"
+            iteration=iteration, name="recall_purify_B"
         )
+        print(self.subprotocols)
+        self.subprotocols["purify_A"].start_expression = (
+            self.subprotocols["purify_A"].await_signal(self.subprotocols["entangle_A"],
+                                                       Signals.SUCCESS))
+        self.subprotocols["purify_B"].start_expression = (
+            self.subprotocols["purify_B"].await_signal(self.subprotocols["entangle_B"],
+                                                       Signals.SUCCESS))
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2500,
@@ -269,7 +271,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
 
 
 def example_sim_setup(node_a, node_b, num_runs):
-    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.9)
+    filt_example = RecallFilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.9, iteration=2)
 
     def record_run(evexpr):
         # Callback that collects data each run
