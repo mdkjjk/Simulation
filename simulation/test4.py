@@ -1,7 +1,10 @@
-#フィルタリングと蒸留を組み合わせた操作を加えたシミュレーション#蒸留操作を加えたシミュレーション
+#フィルタリングと蒸留を組み合わせた操作を加えたシミュレーション
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
+import pandas
+import matplotlib, os
+from matplotlib import pyplot as plt
 
 import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
