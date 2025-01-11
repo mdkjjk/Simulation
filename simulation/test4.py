@@ -1,7 +1,10 @@
-#フィルタリングと蒸留を組み合わせた操作を加えたシミュレーション#蒸留操作を加えたシミュレーション
+#フィルタリングと蒸留を組み合わせた操作を加えたシミュレーション
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
+import pandas
+import matplotlib, os
+from matplotlib import pyplot as plt
 
 import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
@@ -66,6 +69,7 @@ class Distil(NodeProtocol):
         name = name if name else "DistilNode({}, {})".format(node.name, port.name)
         super().__init__(node, name=name)
         self.port = port
+        print(f"{self.name}: {self.port}")
         # TODO rename this expression to 'qubit input'
         self.start_expression = start_expression
         self._program = self._setup_dejmp_program(conj_rotation)
@@ -95,15 +99,17 @@ class Distil(NodeProtocol):
         qmemory_ready = self.start_expression
         self.signal = False
         while True:
-            print(f"{self.name}: Start")
             # self.send_signal(Signals.WAITING)
             expr = yield cchannel_ready | qmemory_ready
             # self.send_signal(Signals.BUSY)
             if expr.first_term.value:
+                print(f"{self.name}: Start II")
                 classical_message = self.port.rx_input(header=self.header)
+                print(f"{self.name}: received message with {classical_message}")
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
+                print(f"{self.name}: Start I")
                 if self.signal == True:
                     continue
                 source_protocol = expr.second_term.atomic_source
@@ -176,6 +182,7 @@ class Distil(NodeProtocol):
         # Send local results to the remote node to allow it to check for success.
         self.port.tx_output(Message([self.local_qcount, self.local_meas_result],
                                     header=self.header))
+        print(f"{self.name}: DEJMPS done")
 
     def _check_success(self):
         # Check if distillation succeeded by comparing local and remote results
@@ -268,11 +275,11 @@ class Filter(NodeProtocol):
 
     def run(self):
         while True:
-            print(f"{self.name}: Start")
             qmemory_ready = self.start_expression
             yield qmemory_ready
             cchannel_ready = self.await_port_input(self.port)
             if qmemory_ready.value:
+                print(f"{self.name}: Start I")
                 source_protocol = qmemory_ready.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=qmemory_ready.triggered_events[0], receiver=self)
@@ -282,6 +289,7 @@ class Filter(NodeProtocol):
             yield cchannel_ready
             print(f"{self.name}: run")
             if cchannel_ready.value:
+                print(f"{self.name}: Start II")
                 classical_message = self.port.rx_input(header=self.header)
                 print(f"{self.name}: received message with {classical_message}")
                 if classical_message:
@@ -369,10 +377,10 @@ class PurifyExample(LocalProtocol):
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
                           name="entangle_B"))
-        self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob"], role="A", name="distil_A"))
-        self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice"], role="B", name="distil_B"))
-        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob"], epsilon=epsilon, name="filter_A"))
-        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice"], epsilon=epsilon, name="filter_B"))
+        self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob_dis"], role="A", name="distil_A"))
+        self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice_dis"], role="B", name="distil_B"))
+        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob_fil"], epsilon=epsilon, name="filter_A"))
+        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice_fil"], epsilon=epsilon, name="filter_B"))
         self.subprotocols["distil_A"].start_expression = (
             self.subprotocols["distil_A"].await_signal(self.subprotocols["entangle_A"],
                                                        Signals.SUCCESS))
@@ -434,13 +442,20 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(depolar_rate)))
-    conn_cchannel = DirectConnection(
-        "CChannelConn_AB",
-        ClassicalChannel("CChannel_A->B", length=node_distance,
+    conn_cchannel_dis = DirectConnection(
+        "CChannelConn_dis_AB",
+        ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
-        ClassicalChannel("CChannel_B->A", length=node_distance,
+        ClassicalChannel("CChannel_dis_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    network.add_connection(node_a, node_b, connection=conn_cchannel, port_name_node1="cout_bob", port_name_node2="cin_alice")
+    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
+    conn_cchannel_fil = DirectConnection(
+        "CChannelConn_fil_AB",
+        ClassicalChannel("CChannel_fil_A->B", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}),
+        ClassicalChannel("CChannel_fil_B->A", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(2500),
