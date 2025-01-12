@@ -62,11 +62,13 @@ class Filter(NodeProtocol):
             expr = yield cchannel_ready | qmemory_ready
             # self.send_signal(Signals.BUSY)
             if expr.first_term.value:
+                print(f"{self.name}: Start II")
                 classical_message = self.port.rx_input(header=self.header)
                 if classical_message:
                     self.remote_qcount, self.remote_meas_OK = classical_message.items
                     self._handle_cchannel_rx()
             elif expr.second_term.value:
+                print(f"{self.name}: Start I")
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
@@ -172,6 +174,7 @@ class FilteringExample(LocalProtocol):
     def run(self):
         self.start_subprotocols()
         for i in range(self.num_runs):
+            print(f"Simulation {i}")
             start_time = sim_time()
             self.subprotocols["entangle_A"].entangled_pairs = 0
             self.send_signal(Signals.WAITING)
@@ -190,7 +193,7 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2500,
                           node_distance=30):
     network = Network("purify_network")
 
@@ -282,13 +285,13 @@ def create_plot():
     data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
-    fidelities.to_csv(f"{save_dir}/Entanglement fidelity with filtering_{existing_files + 1}.csv")
+    fidelities.to_csv(f"{save_dir}/Entanglement fidelity with filtering_{existing_files + 2}.csv")
 
 
 if __name__ == "__main__":
-    #network = example_network_setup()
-    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
-    #filt_example.start()
-    #ns.sim_run()
-    #print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
-    create_plot()
+    network = example_network_setup()
+    filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=2)
+    filt_example.start()
+    ns.sim_run()
+    print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
+    #create_plot()
