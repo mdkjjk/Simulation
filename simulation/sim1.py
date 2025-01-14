@@ -246,12 +246,12 @@ def create_plot():
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
     save_dir = "./plots"
-    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original:Teleportation")])
-    filename = f"{save_dir}/Original:Teleportation fidelity_{existing_files + 1}.png"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Teleportation")])
+    filename = f"{save_dir}/Original_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
-    fidelities.to_csv(f"{save_dir}/Original:Teleportation fidelity_{existing_files + 2}.csv")
+    fidelities.to_csv(f"{save_dir}/Original_Teleportation fidelity_{existing_files + 2}.csv")
 
 
 if __name__ == "__main__":

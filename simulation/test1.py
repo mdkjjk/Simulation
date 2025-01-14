@@ -134,19 +134,19 @@ def run_experiment(node_distances):
 
 def create_plot():
     matplotlib.use('Agg')
-    node_distances = [i for i in range(5, 100, 5)]
+    node_distances = [10 * i for i in range(5, 100, 5)]
     fidelities = run_experiment(node_distances)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of entanglement"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
     save_dir = "./plots"
-    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original:Entanglement")])
-    filename = f"{save_dir}/Original:Entanglement fidelity_{existing_files + 1}.png"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Entanglement")])
+    filename = f"{save_dir}/Original_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
-    fidelities.to_csv(f"{save_dir}/Original:Entanglement fidelity_{existing_files + 2}.csv")
+    fidelities.to_csv(f"{save_dir}/Original_Entanglement fidelity_{existing_files + 2}.csv")
 
 
 if __name__ == "__main__":
