@@ -365,7 +365,7 @@ class FilteringExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=0,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -439,37 +439,37 @@ def example_sim_setup(node_a, node_b, num_runs):
     return filt_example, dc
 
 
-def run_experiment(depolar_rates):
+def run_experiment(node_distances):
     fidelity_data = pandas.DataFrame()
-    for depolar_rate in depolar_rates:
+    for node_distance in node_distances:
         ns.sim_reset()
-        network = example_network_setup(depolar_rate=depolar_rate)
+        network = example_network_setup(node_distance=node_distance)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
         example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
-        df['depolar_rate'] = depolar_rate
+        df['node_distance'] = node_distance
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
 def create_plot():
     matplotlib.use('Agg')
-    depolar_rates = [100 * i for i in range(0, 60, 3)]
-    fidelities = run_experiment(depolar_rates)
+    node_distances = [1 + i for i in range(0, 100, 5)]
+    fidelities = run_experiment(node_distances)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of the teleported quantum state with filtering"}
-    data = fidelities.groupby("depolar_rate")['F2'].agg(
+    data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
     save_dir = "./plots"
-    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Teleportation fidelity with filtering")])
-    filename = f"{save_dir}/Teleportation fidelity with filtering_{existing_files + 1}.png"
-    data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Teleportation")])
+    filename = f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 1}.png"
+    data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
-    fidelities.to_csv(f"{save_dir}/Teleportation fidelity with filtering_{existing_files + 2}.csv")
+    fidelities.to_csv(f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 2}.csv")
 
 
 if __name__ == "__main__":

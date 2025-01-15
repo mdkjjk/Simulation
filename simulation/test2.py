@@ -114,6 +114,7 @@ class Filter(NodeProtocol):
     def _check_success(self):
         # Check if protocol succeeded after receiving new input (qubit or classical information).
         # Returns true if protocol has succeeded on this node
+        #print(f"{self.name}: [{self.local_qcount}, {self.local_meas_OK}]")
         if (self.local_qcount > 0 and self.local_qcount == self.remote_qcount and
                 self.local_meas_OK and self.remote_meas_OK):
             # SUCCESS!
@@ -124,11 +125,13 @@ class Filter(NodeProtocol):
         else:
             # FAILURE
             self._handle_fail()
+            #print(f"{self.name}: FAIL")
             self.send_signal(Signals.FAIL, self.local_qcount)
 
     def _handle_fail(self):
         if self.node.qmemory.mem_positions[self._qmem_pos].in_use:
             self.node.qmemory.pop(positions=[self._qmem_pos])
+            #print(f"{self.name}: POP!!")
 
     @property
     def is_connected(self):
@@ -154,9 +157,9 @@ class FilteringExample(LocalProtocol):
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
                           name="entangle_B"))
-        self.add_subprotocol(Filter(node_a, node_a.get_conn_port(node_b.ID),
+        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob_fil"],
                                     epsilon=epsilon, name="purify_A"))
-        self.add_subprotocol(Filter(node_b, node_b.get_conn_port(node_a.ID),
+        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice_fil"],
                                     epsilon=epsilon, name="purify_B"))
         # Set start expressions
         self.subprotocols["purify_A"].start_expression = (
@@ -194,7 +197,7 @@ class FilteringExample(LocalProtocol):
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
-                          node_distance=30):
+                          node_distance=10):
     network = Network("purify_network")
 
     node_a, node_b = network.add_nodes(["node_A", "node_B"])
@@ -211,20 +214,29 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    conn_cchannel = DirectConnection(
-        "CChannelConn_AB",
-        ClassicalChannel("CChannel_A->B", length=node_distance,
+    conn_cchannel_dis = DirectConnection(
+        "CChannelConn_dis_AB",
+        ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
-        ClassicalChannel("CChannel_B->A", length=node_distance,
+        ClassicalChannel("CChannel_dis_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    network.add_connection(node_a, node_b, connection=conn_cchannel)
+    node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
+    node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
+    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, label="distil", port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
+    conn_cchannel_fil = DirectConnection(
+        "CChannelConn_fil_AB",
+        ClassicalChannel("CChannel_fil_A->B", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}),
+        ClassicalChannel("CChannel_fil_B->A", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, label="filter", port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
                                       "delay_model": FibreDelayModel(c=200e3)},
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
-        node_a, node_b, channel_to=qchannel, label="quantum")
+        node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
     # Link Alice ports:
     node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(
         node_a.ports[port_name_a])
@@ -273,7 +285,7 @@ def run_experiment(node_distances):
 
 def create_plot():
     matplotlib.use('Agg')
-    node_distances = [i for i in range(5, 100, 5)]
+    node_distances = [1 + i for i in range(0, 100, 5)]
     fidelities = run_experiment(node_distances)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of entanglement with filtering"}
@@ -290,7 +302,7 @@ def create_plot():
 
 if __name__ == "__main__":
     #network = example_network_setup()
-    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=2)
+    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
     #filt_example.start()
     #ns.sim_run()
     #print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
