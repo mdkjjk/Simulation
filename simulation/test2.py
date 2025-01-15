@@ -274,7 +274,7 @@ def run_experiment(node_distances):
         network = example_network_setup(node_distance=node_distance)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
-        example, dc = example_sim_setup(node_a, node_b, 100)
+        example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
@@ -291,7 +291,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots"
+    save_dir = "./plots_2000"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Entanglement")])
     filename = f"{save_dir}/Filtering_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

@@ -620,13 +620,13 @@ def run_experiment(node_distances):
 
 def create_plot():
     matplotlib.use('Agg')
-    node_distances = [i for i in range(5, 100, 5)]
+    node_distances = [1 + i for i in range(0, 100, 5)]
     fidelities = run_experiment(node_distances)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of the teleported quantum state with distil & filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots"
+    save_dir = "./plots_2000"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil&Filtering_Teleportation")])
     filename = f"{save_dir}/Distil&Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

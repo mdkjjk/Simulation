@@ -463,7 +463,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots"
+    save_dir = "./plots_2000"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Teleportation")])
     filename = f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
