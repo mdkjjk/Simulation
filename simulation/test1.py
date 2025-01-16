@@ -82,8 +82,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
-                                      "delay_model": FibreDelayModel(c=200e3)},
-                              depolar_rate=0)
+                                      "delay_model": FibreDelayModel(c=200e3)})
     port_name_a, port_name_b = network.add_connection(
         node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
     # Link Alice ports:

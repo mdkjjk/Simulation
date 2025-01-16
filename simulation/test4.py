@@ -103,7 +103,6 @@ class Distil(NodeProtocol):
             if expr.first_term.value:
                 #print(f"{self.name}: Start II")
                 classical_message = self.port.rx_input(header=self.header)
-                #print(f"{self.name}: received message with {classical_message}")
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
             elif expr.second_term.value:
@@ -111,7 +110,6 @@ class Distil(NodeProtocol):
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
-                #print(f"{self.name}: entanglement received at {ready_signal.result}")
                 yield from self._handle_new_qubit(ready_signal.result)
             self._check_success()
 
@@ -127,11 +125,9 @@ class Distil(NodeProtocol):
 
     def _clear_qmem_positions(self):
         positions = [pos for pos in self._qmem_positions if pos is not None]
-        #print(f"{self.name}: pop_positions = {positions} at _clear_qmem_positions")
         if len(positions) > 0:
             self.node.qmemory.pop(positions=positions)
         self._qmem_positions = [None, None]
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
 
     def _handle_new_qubit(self, memory_position):
         # Process signalling of new entangled qubit
@@ -141,38 +137,30 @@ class Distil(NodeProtocol):
             assert not self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
             assert memory_position != self._qmem_positions[0]
             self._qmem_positions[1] = memory_position
-            #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
             self._waiting_on_second_qubit = False
             yield from self._node_do_DEJMPS()
         else:
             # New candidate for first qubit arrived
             # Pop previous qubit if present:
             pop_positions = [p for p in self._qmem_positions if p is not None and p != memory_position]
-            #print(f"{self.name}: pop_positions = {pop_positions} at _handle_new_qubit")
             if len(pop_positions) > 0:
                 self.node.qmemory.pop(positions=pop_positions)
             # Set new position:
             self._qmem_positions[0] = memory_position
             self._qmem_positions[1] = None
-            #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
             self.local_qcount += 1
             self.local_meas_result = None
             self._waiting_on_second_qubit = True
 
     def _node_do_DEJMPS(self):
         # Perform DEJMPS distillation protocol locally on one node
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         pos1, pos2 = self._qmem_positions
         if self.node.qmemory.busy:
             yield self.await_program(self.node.qmemory)
         # We perform local DEJMPS
         yield self.node.qmemory.execute_program(self._program, [pos1, pos2])  # If instruction not instant
         self.local_meas_result = self._program.output["m"][0]
-        #is_empty0 = self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
-        #is_empty1 = self.node.qmemory.mem_positions[self._qmem_positions[1]].is_empty
-        #print(f"{self.name}: mem_pos0 = {is_empty1}, mem_pos1 = {is_empty0}")
         self._qmem_positions[1] = None
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         # Send local results to the remote node to allow it to check for success.
         self.port.tx_output(Message([self.local_qcount, self.local_meas_result],
                                     header=self.header))
@@ -275,7 +263,6 @@ class Filter(NodeProtocol):
             if expr.first_term.value:
                 #print(f"{self.name}: Start II")
                 classical_message = self.port.rx_input(header=self.header)
-                #print(f"{self.name}: received message with {classical_message}")
                 if classical_message:
                     self.remote_qcount, self.remote_meas_OK = classical_message.items
                     self._handle_cchannel_rx()
@@ -326,7 +313,6 @@ class Filter(NodeProtocol):
     def _check_success(self):
         # Check if protocol succeeded after receiving new input (qubit or classical information).
         # Returns true if protocol has succeeded on this node
-        #print(f"{self.name}: local_meas_OK = {self.local_meas_OK}, remote_meas_OK = {self.remote_meas_OK}")
         if (self.local_qcount > 0 and self.local_qcount == self.remote_qcount and
                 self.local_meas_OK and self.remote_meas_OK):
             # SUCCESS!
@@ -337,7 +323,6 @@ class Filter(NodeProtocol):
         elif self.local_meas_OK and self.local_qcount > self.remote_qcount:
             # Need to wait for latest remote status
             pass
-            #print(f"{self.name}: _check_success")
         else:
             # FAILURE
             #print(f"{self.name}: FAIL")
@@ -369,13 +354,13 @@ class PurifyExample(LocalProtocol):
         self.num_runs = num_runs
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
                                            num_pairs=2, name="entangle_A"))
-        self.add_subprotocol(
-            EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
-                          name="entangle_B"))
+        self.add_subprotocol(EntangleNodes(node=node_b, role="receiver", input_mem_pos=0,
+                                           num_pairs=2, name="entangle_B"))
         self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob_dis"], role="A", name="distil_A"))
         self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice_dis"], role="B", name="distil_B"))
         self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob_fil"], epsilon=epsilon, name="filter_A"))
         self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice_fil"], epsilon=epsilon, name="filter_B"))
+
         self.subprotocols["distil_A"].start_expression = (
             self.subprotocols["distil_A"].await_signal(self.subprotocols["entangle_A"],
                                                        Signals.SUCCESS))
@@ -416,7 +401,6 @@ class PurifyExample(LocalProtocol):
                 "pairs": self.subprotocols["entangle_A"].entangled_pairs,
             }
             self.send_signal(Signals.SUCCESS, result)
-            #print(f"Simulation {i}: Finish")
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
@@ -427,48 +411,44 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    state_sampler = StateSampler(
-        [ks.b01, ks.s00],
+    state_sampler = StateSampler([ks.b01, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
-    node_a.add_subcomponent(QSource(
-        "QSource_A", state_sampler=state_sampler,
+    node_a.add_subcomponent(QSource("QSource_A", state_sampler=state_sampler,
         models={"emission_delay_model": FixedDelayModel(delay=source_delay)},
         num_ports=2, status=SourceStatus.EXTERNAL))
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    conn_cchannel_dis = DirectConnection(
-        "CChannelConn_dis_AB",
+    node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
+    node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
+
+    conn_cchannel_dis = DirectConnection("CChannelConn_dis_AB",
         ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
         ClassicalChannel("CChannel_dis_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
-    node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
-    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, label="distil", port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
-    conn_cchannel_fil = DirectConnection(
-        "CChannelConn_fil_AB",
+    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, label="distil",
+                           port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
+    conn_cchannel_fil = DirectConnection("CChannelConn_fil_AB",
         ClassicalChannel("CChannel_fil_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
         ClassicalChannel("CChannel_fil_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, label="filter", port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
+    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, label="filter",
+                           port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
-                                      "delay_model": FibreDelayModel(c=200e3)},
-                              depolar_rate=0)
+                                      "delay_model": FibreDelayModel(c=200e3)})
     port_name_a, port_name_b = network.add_connection(
         node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
+
     # Link Alice ports:
-    node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(
-        node_a.ports[port_name_a])
-    node_a.subcomponents["QSource_A"].ports["qout0"].connect(
-        node_a.qmemory.ports["qin0"])
+    node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(node_a.ports[port_name_a])
+    node_a.subcomponents["QSource_A"].ports["qout0"].connect(node_a.qmemory.ports["qin0"])
     # Link Bob ports:
     node_b.ports[port_name_b].forward_input(node_b.qmemory.ports["qin0"])
     return network
-
 
 def example_sim_setup(node_a, node_b, num_runs):
     """Example simulation setup for purification protocols.
@@ -500,7 +480,6 @@ def example_sim_setup(node_a, node_b, num_runs):
                                      event_type=Signals.SUCCESS.value))
     return filt_example, dc
 
-
 def run_experiment(node_distances):
     fidelity_data = pandas.DataFrame()
     for node_distance in node_distances:
@@ -515,7 +494,6 @@ def run_experiment(node_distances):
         df['node_distance'] = node_distance
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
-
 
 def create_plot():
     matplotlib.use('Agg')
