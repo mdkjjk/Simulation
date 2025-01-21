@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 matplotlib.use('Agg')
 input_csv1 = pd.read_csv("./Original_Entanglement fidelity_2.csv")
-input_csv2 = pd.read_csv("./Filtering_Entanglement fidelity_2.csv")
+input_csv2 = pd.read_csv("./Filtering_Entanglement fidelity_4.csv")
 input_csv3 = pd.read_csv("./Distil_Entanglement fidelity_2.csv")
 input_csv4 = pd.read_csv("./Distil&Filtering_Entanglement fidelity_2.csv")
 
