@@ -45,6 +45,8 @@ plt.errorbar(xcolumn, data2['fidelity'], yerr=data2['sem'], marker="o", label='F
 plt.errorbar(xcolumn, data3['fidelity'], yerr=data3['sem'], marker="o", label='Distil')
 plt.errorbar(xcolumn, data4['fidelity'], yerr=data4['sem'], marker="o", label='Distil&Filtering')
 
+plt.xlim(0, 42)
+plt.ylim(bottom = 0.7)
 plt.xlabel('node_distance')
 plt.ylabel('Fidelity')
 plt.title('Fidelity of entanglement')
@@ -54,7 +56,7 @@ plt.grid()
 plt.savefig(filename1)
 print(f"Plot saved as {filename1}")
 
-plt.figure()
+"""plt.figure()
 plt.errorbar(xcolumn, data11['fidelity'], yerr=data11['sem'], marker="o", label='Original')
 plt.errorbar(xcolumn, data22['fidelity'], yerr=data22['sem'], marker="o", label='Filtering')
 plt.errorbar(xcolumn, data33['fidelity'], yerr=data33['sem'], marker="o", label='Distil')
@@ -82,4 +84,4 @@ plt.legend()
 plt.grid()
 
 plt.savefig(filename3)
-print(f"Plot saved as {filename3}")
+print(f"Plot saved as {filename3}")"""
