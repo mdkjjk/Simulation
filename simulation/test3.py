@@ -30,6 +30,9 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
+from netsquid.qubits.qformalism import QFormalism
+
+ns.set_qstate_formalism(QFormalism.DM)
 
 __all__ = [
     "Distil",
@@ -259,7 +262,11 @@ class DistilExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
+<<<<<<< HEAD
 def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+=======
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=1000,
+>>>>>>> test_branch
                           node_distance=30):
     network = Network("network")
 
@@ -355,6 +362,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with distil"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
+<<<<<<< HEAD
     save_dir = "./plots_2000"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil_Entanglement")])
     filename = f"{save_dir}/Distil_Entanglement fidelity_{existing_files + 1}.png"
@@ -362,6 +370,15 @@ def create_plot():
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
     fidelities.to_csv(f"{save_dir}/Distil_Entanglement fidelity_{existing_files + 2}.csv")
+=======
+    save_dir = "./plots_1"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil Entanglement")])
+    filename = f"{save_dir}/Distil Entanglement fidelity_{existing_files + 1}.png"
+    data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
+    plt.savefig(filename)
+    print(f"Plot saved as {filename}")
+    fidelities.to_csv(f"{save_dir}/Data_Distil Entanglement fidelity_{existing_files + 1}.csv")
+>>>>>>> test_branch
 
 
 if __name__ == "__main__":
