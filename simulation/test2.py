@@ -27,6 +27,9 @@ from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayMo
 from netsquid.components.models import DepolarNoiseModel
 from netsquid.nodes.connections import DirectConnection
 from pydynaa import EventExpression
+from netsquid.qubits.qformalism import QFormalism
+
+ns.set_qstate_formalism(QFormalism.DM)
 
 
 class Filter(NodeProtocol):
@@ -196,7 +199,7 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=1000,
                           node_distance=10):
     network = Network("purify_network")
 
@@ -291,13 +294,13 @@ def create_plot():
                   'title': "Fidelity of entanglement with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_2000"
-    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Entanglement")])
-    filename = f"{save_dir}/Filtering_Entanglement fidelity_{existing_files + 1}.png"
+    save_dir = "./plots_1"
+    existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering Entanglement")])
+    filename = f"{save_dir}/Filtering Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
-    fidelities.to_csv(f"{save_dir}/Filtering_Entanglement fidelity_{existing_files + 2}.csv")
+    fidelities.to_csv(f"{save_dir}/Data_Filtering Entanglement fidelity_{existing_files + 1}.csv")
 
 
 if __name__ == "__main__":
