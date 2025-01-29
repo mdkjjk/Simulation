@@ -31,6 +31,7 @@ from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
+
 class Example(LocalProtocol):
     def __init__(self, node_a, node_b, num_runs):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="example")
@@ -102,14 +103,18 @@ class BellMeasurement(NodeProtocol):
             source_protocol = expr_port.atomic_source
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
             self._qmem_pos1 = ready_signal.result
+            qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos1])
+            print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
+            #print(f"{self.name}: RDM = {ns.qubits.reduced_dm(qubit1[0])}")
             #print(f"{self.name}: Entanglement received at {self._qmem_pos1}")
-            while not self.node.qmemory.unused_positions:
-                yield self.await_timer(1)
             self._qmem_pos0 = self.node.qmemory.unused_positions[0]
             self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
             expr_signal = self.await_program(self.node.qmemory)
             yield expr_signal
             qubit_initialised = True
+            qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos0])
+            print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
+            #print(f"{self.name}: RDM = {ns.qubits.reduced_dm(qubit0[0])}")
             #print(f"{self.name}: Initqubit received at {self._qmem_pos0}")
             if qubit_initialised and entanglement_ready:
                 self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
@@ -145,6 +150,9 @@ class Correction(NodeProtocol):
                 #print(f"{self.name}: Result received")
             else:
                 entanglement_ready = True
+                qubit0 = self.node.qmemory.peek(positions=[0])
+                print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
+                #print(f"{self.name}: RDM = {ns.qubits.reduced_dm(qubit0[0])}")
                 #print(f"{self.name}: Entanglement received")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
@@ -152,13 +160,15 @@ class Correction(NodeProtocol):
                     self.node.qmemory.execute_instruction(instr.INSTR_Z)
                 if meas_results[1] == 0:
                     self.node.qmemory.execute_instruction(instr.INSTR_X)
+                qubit1 = self.node.qmemory.peek(positions=[0])
+                print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
                 self.send_signal(Signals.SUCCESS, 0)
                 #print(f"{self.name}: Teleport success")
                 entanglement_ready = False
                 meas_results = None
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=1000,
                           node_distance=30):
     network = Network("network")
 
@@ -255,9 +265,9 @@ def create_plot():
 
 
 if __name__ == "__main__":
-    #network = example_network_setup()
-    #example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
-    #example.start()
-    #ns.sim_run()
-    #print("Average fidelity of received qubit: {}".format(dc.dataframe["F2"].mean()))
-    create_plot()
+    network = example_network_setup()
+    example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
+    example.start()
+    ns.sim_run()
+    print("Average fidelity of received qubit: {}".format(dc.dataframe["F2"].mean()))
+    #create_plot()
