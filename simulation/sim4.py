@@ -30,6 +30,9 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
+from netsquid.qubits.qformalism import QFormalism
+
+ns.set_qstate_formalism(QFormalism.DM)
 
 
 class Distil(NodeProtocol):
@@ -426,6 +429,10 @@ class Correction(NodeProtocol):
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
                 self._qmem_pos = ready_signal.result
+                qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
+                #dm0 = ns.qubits.reduced_dm(qubit1[0])
+                #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
                 #print(f"{self.name}: Entanglement received at {self._qmem_pos}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
@@ -433,6 +440,10 @@ class Correction(NodeProtocol):
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
                 if meas_results[1] == 0:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
+                qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
+                #dm1 = ns.qubits.reduced_dm(qubit0[0])
+                #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
                 #print(f"{self.name}: Teleport success")
                 entanglement_ready = False
@@ -606,7 +617,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with distil & filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_2000"
+    save_dir = "./plots_dm"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil&Filtering_Teleportation")])
     filename = f"{save_dir}/Distil&Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
@@ -616,9 +627,9 @@ def create_plot():
 
 
 if __name__ == "__main__":
-    #network = example_network_setup()
-    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=2)
-    #filt_example.start()
-    #ns.sim_run()
-    #print("Average fidelity of generated entanglement with purification: {}".format(dc.dataframe["F2"].mean()))
-    create_plot()
+    network = example_network_setup()
+    filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
+    filt_example.start()
+    ns.sim_run()
+    print("Average fidelity of generated entanglement with purification: {}".format(dc.dataframe["F2"].mean()))
+    #create_plot()

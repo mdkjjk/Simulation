@@ -29,7 +29,9 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
+from netsquid.qubits.qformalism import QFormalism
 
+ns.set_qstate_formalism(QFormalism.DM)
 
 class Filter(NodeProtocol):
     """Protocol that does local filtering on a node.
@@ -240,27 +242,34 @@ class Correction(NodeProtocol):
 
     def run(self):
         port_alice = self.node.ports["cin_alice"]
+        expr_signal = self.start_expression
         entanglement_ready = False
         meas_results = None
         while True:
-            #print(f"{self.name}: Start")
-            expr_signal = self.start_expression
-            yield expr_signal
-            entanglement_ready = True
-            source_protocol = expr_signal.atomic_source
-            ready_signal = source_protocol.get_signal_by_event(event=expr_signal.triggered_events[0], receiver=self)
-            self._qmem_pos = ready_signal.result
-            #print(f"{self.name}: Entanglement received")
-            evexpr_port_a = self.await_port_input(port_alice)
-            yield evexpr_port_a
-            meas_results = port_alice.rx_input().items
-            #print(f"{self.name}: Result received")
+            expr = yield (self.await_port_input(port_alice) | expr_signal)
+            if expr.first_term.value:
+                meas_results = port_alice.rx_input().items
+                #print(f"{self.name}: Result: {meas_results}")
+            else:
+                entanglement_ready = True
+                source_protocol = expr.second_term.atomic_source
+                ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
+                self._qmem_pos = ready_signal.result
+                qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
+                #dm0 = ns.qubits.reduced_dm(qubit1[0])
+                #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
+                #print(f"{self.name}: Entanglement received at {self._qmem_pos}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
                 if meas_results[1] == 0:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
+                qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
+                #dm1 = ns.qubits.reduced_dm(qubit0[0])
+                #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
                 #print(f"{self.name}: Teleport success")
                 entanglement_ready = False
@@ -320,9 +329,9 @@ class FilteringExample(LocalProtocol):
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=1,
                           name="entangle_B"))
-        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob"],
+        self.add_subprotocol(Filter(node_a, node_a.ports["cout_bob_fil"],
                                     epsilon=epsilon, name="purify_A"))
-        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice"],
+        self.add_subprotocol(Filter(node_b, node_b.ports["cin_alice_fil"],
                                     epsilon=epsilon, name="purify_B"))
         self.add_subprotocol(BellMeasurement(node=node_a, port=node_a.ports["cout_bob"], name="teleport_A"))
         self.add_subprotocol(Correction(node=node_b, name="teleport_B"))
@@ -373,8 +382,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    state_sampler = StateSampler(
-        [ks.b01, ks.s00],
+    state_sampler = StateSampler([ks.b01, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
@@ -383,13 +391,27 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    conn_cchannel = DirectConnection(
-        "CChannelConn_AB",
-        ClassicalChannel("CChannel_A->B", length=node_distance,
+    node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
+    node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
+
+    conn_cchannel_dis = DirectConnection("CChannelConn_dis_AB",
+        ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
-        ClassicalChannel("CChannel_B->A", length=node_distance,
+        ClassicalChannel("CChannel_dis_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    network.add_connection(node_a, node_b, connection=conn_cchannel, port_name_node1="cout_bob", port_name_node2="cin_alice")
+    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, label="distil",
+                           port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
+    conn_cchannel_fil = DirectConnection("CChannelConn_fil_AB",
+        ClassicalChannel("CChannel_fil_A->B", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}),
+        ClassicalChannel("CChannel_fil_B->A", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, label="filter",
+                           port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
+    cchannel = DirectConnection("CChannelConn_tel", ClassicalChannel("CChannel_dis_A->B", length=node_distance,
+                                models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=cchannel, label="tereport",
+                           port_name_node1="cout_bob", port_name_node2="cin_alice")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
@@ -397,6 +419,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
         node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
+
     # Link Alice ports:
     node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(
         node_a.ports[port_name_a])
@@ -463,7 +486,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_2000"
+    save_dir = "./plots_dm"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Teleportation")])
     filename = f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
@@ -473,9 +496,9 @@ def create_plot():
 
 
 if __name__ == "__main__":
-    #network = example_network_setup()
-    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
-    #filt_example.start()
-    #ns.sim_run()
-    #print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
-    create_plot()
+    network = example_network_setup()
+    filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
+    filt_example.start()
+    ns.sim_run()
+    print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
+    #create_plot()
