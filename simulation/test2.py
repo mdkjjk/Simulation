@@ -29,7 +29,7 @@ from netsquid.nodes.connections import DirectConnection
 from pydynaa import EventExpression
 from netsquid.qubits.qformalism import QFormalism
 
-ns.set_qstate_formalism(QFormalism.DM)
+#ns.set_qstate_formalism(QFormalism.DM)
 
 
 class Filter(NodeProtocol):
@@ -199,7 +199,7 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
                           node_distance=10):
     network = Network("purify_network")
 
@@ -208,7 +208,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
     state_sampler = StateSampler(
-        [ks.b01, ks.s00],
+        [ks.b00, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
@@ -251,7 +251,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
 
 
 def example_sim_setup(node_a, node_b, num_runs):
-    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.3)
+    filt_example = FilteringExample(node_a, node_b, num_runs=num_runs, epsilon=0.9)
 
     def record_run(evexpr):
         # Callback that collects data each run
@@ -260,7 +260,7 @@ def example_sim_setup(node_a, node_b, num_runs):
         # Record fidelity
         q_A, = node_a.qmemory.pop(positions=[result["pos_A"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
-        f2 = qapi.fidelity([q_A, q_B], ks.b01, squared=True)
+        f2 = qapi.fidelity([q_A, q_B], ks.b00, squared=True)
         return {"F2": f2, "pairs": result["pairs"], "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -294,7 +294,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_dm"
+    save_dir = "./plots_kets0"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Entanglement")])
     filename = f"{save_dir}/Filtering_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

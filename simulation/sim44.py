@@ -32,7 +32,7 @@ from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 from netsquid.qubits.qformalism import QFormalism
 
-ns.set_qstate_formalism(QFormalism.DM)
+#ns.set_qstate_formalism(QFormalism.DM)
 
 
 
@@ -520,7 +520,7 @@ class PurifyExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -630,7 +630,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with distil & filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_b00"
+    save_dir = "./plots_kets0"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil&Filtering_Teleportation")])
     filename = f"{save_dir}/Distil&Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

@@ -1,0 +1,5 @@
+QFormalism = DM
+node_distance = 1~96
+depolar_rate = 2000
+source_fidelity = 0.8
+entanglement = b00

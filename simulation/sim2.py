@@ -31,7 +31,7 @@ from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 from netsquid.qubits.qformalism import QFormalism
 
-ns.set_qstate_formalism(QFormalism.DM)
+#ns.set_qstate_formalism(QFormalism.DM)
 
 class Filter(NodeProtocol):
     """Protocol that does local filtering on a node.
@@ -393,7 +393,7 @@ class FilteringExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -505,7 +505,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_b00"
+    save_dir = "./plots_kets0"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Teleportation")])
     filename = f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
