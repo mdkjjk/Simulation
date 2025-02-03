@@ -30,7 +30,9 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
+from netsquid.qubits.qformalism import QFormalism
 
+ns.set_qstate_formalism(QFormalism.DM)
 
 class Distil(NodeProtocol):
     """Protocol that does local DEJMPS distillation on a node.
@@ -349,7 +351,7 @@ class Filter(NodeProtocol):
 
 
 class PurifyExample(LocalProtocol):
-    def __init__(self, node_a, node_b, num_runs, epsilon=0.9):
+    def __init__(self, node_a, node_b, num_runs, epsilon=0.3):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="Purify example")
         self.num_runs = num_runs
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
@@ -503,7 +505,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with distil & filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_2000"
+    save_dir = "./plots_dm"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil&Filtering_Entanglement fidelity")])
     filename = f"{save_dir}/Distil&Filtering_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 
 matplotlib.use('Agg')
 """input_csv1 = pd.read_csv("./Original_Entanglement fidelity_2.csv")
-input_csv2 = pd.read_csv("./Filtering_Entanglement fidelity_2.csv")
+input_csv2 = pd.read_csv("./Filtering_Entanglement fidelity_4.csv")
 input_csv3 = pd.read_csv("./Distil_Entanglement fidelity_2.csv")
-input_csv4 = pd.read_csv("./Distil&Filtering_Entanglement fidelity_2.csv")"""
+input_csv4 = pd.read_csv("./Distil&Filtering_Entanglement fidelity_4.csv")"""
 
-input_csv11 = pd.read_csv("./Original_Teleportation fidelity_2.csv")
-input_csv22 = pd.read_csv("./Filtering_Teleportation fidelity_2.csv")
+input_csv11 = pd.read_csv("./Original_Teleportation fidelity_4.csv")
+input_csv22 = pd.read_csv("./Filtering_Teleportation fidelity_4.csv")
 input_csv33 = pd.read_csv("./Distil_Teleportation fidelity_2.csv")
-input_csv44 = pd.read_csv("./Distil&Filtering_Teleportation fidelity_2.csv")
+input_csv44 = pd.read_csv("./Distil&Filtering_Teleportation fidelity_4.csv")
 
 """data1 = input_csv1.groupby("node_distance")['F2'].agg(fidelity='mean', sem='sem').reset_index()
 data2 = input_csv2.groupby("node_distance")['F2'].agg(fidelity='mean', sem='sem').reset_index()
@@ -28,7 +28,7 @@ time2 = input_csv22.groupby("node_distance")['time'].agg(time='mean', sem='sem')
 time3 = input_csv33.groupby("node_distance")['time'].agg(time='mean', sem='sem').reset_index()
 time4 = input_csv44.groupby("node_distance")['time'].agg(time='mean', sem='sem').reset_index()
 
-xcolumn = time1['node_distance']
+xcolumn = data11['node_distance']
 
 save_dir = "."
 existing_files1 = len([f for f in os.listdir(save_dir) if f.startswith("Result_entanglement")])
