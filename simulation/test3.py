@@ -271,7 +271,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
     state_sampler = StateSampler(
-        [ks.b01, ks.s00],
+        [ks.b00, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
@@ -324,7 +324,7 @@ def example_sim_setup(node_a, node_b, num_runs):
         # Record fidelity
         q_A, = node_a.qmemory.pop(positions=[result["pos_A"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
-        f2 = qapi.fidelity([q_A, q_B], ks.b01, squared=True)
+        f2 = qapi.fidelity([q_A, q_B], ks.b00, squared=True)
         return {"F2": f2, "pairs": result["pairs"], "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -358,7 +358,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with distil"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_dm"
+    save_dir = "./plots_b00"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil_Entanglement")])
     filename = f"{save_dir}/Distil_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)

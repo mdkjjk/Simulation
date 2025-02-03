@@ -166,7 +166,7 @@ class Correction(NodeProtocol):
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
-                if meas_results[1] == 0:
+                if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
                 qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
                 #print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
@@ -178,7 +178,7 @@ class Correction(NodeProtocol):
                 meas_results = None
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=5000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -186,7 +186,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    state_sampler = StateSampler([ks.b01, ks.s00],
+    state_sampler = StateSampler([ks.b00, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
@@ -279,7 +279,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_dm"
+    save_dir = "./plots_b00"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Teleportation")])
     filename = f"{save_dir}/Original_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
