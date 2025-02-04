@@ -21,9 +21,7 @@ from netsquid.protocols.protocol import Signals
 from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
-from netsquid.qubits.qformalism import QFormalism
 
-#ns.set_qstate_formalism(QFormalism.DM)
 
 class Example(LocalProtocol):
     def __init__(self, node_a, node_b, num_runs):
@@ -142,7 +140,7 @@ def create_plot():
                   'title': "Fidelity of entanglement"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_kets0"
+    save_dir = "./plots_clean/ket&sf80"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Entanglement")])
     filename = f"{save_dir}/Original_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
