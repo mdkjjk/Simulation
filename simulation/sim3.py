@@ -17,8 +17,6 @@ from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayMo
 from netsquid.components.models import DepolarNoiseModel
 from netsquid.util.simtools import sim_time
 from netsquid.util.datacollector import DataCollector
-from netsquid.qubits.ketutil import outerprod
-from netsquid.qubits.ketstates import s0, s1
 from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits import ketstates as ks
@@ -33,14 +31,6 @@ from pydynaa import EventExpression
 from netsquid.qubits.qformalism import QFormalism
 
 ns.set_qstate_formalism(QFormalism.DM)
-
-
-__all__ = [
-    "Distil",
-    "DistilExample",
-    "example_network_setup",
-    "example_sim_setup",
-]
 
 
 class Distil(NodeProtocol):
@@ -121,11 +111,10 @@ class Distil(NodeProtocol):
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
-                #print(f"{self.name}: entanglement received at {ready_signal.result}")
                 #print(f"{self.name}: Entanglement received at {ready_signal.result} / time: {sim_time()}")
-                qubit1 = self.node.qmemory.peek(positions=[ready_signal.result])
+                #qubit1 = self.node.qmemory.peek(positions=[ready_signal.result])
                 #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-                dm0 = ns.qubits.reduced_dm(qubit1[0])
+                #dm0 = ns.qubits.reduced_dm(qubit1[0])
                 #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
                 yield from self._handle_new_qubit(ready_signal.result)
             self._check_success()
@@ -158,8 +147,6 @@ class Distil(NodeProtocol):
             self._qmem_positions[1] = memory_position
             #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
             self._waiting_on_second_qubit = False
-            if self.node.name == 'node_A':
-                yield self.await_timer(160000)
             yield from self._node_do_DEJMPS()
         else:
             # New candidate for first qubit arrived
@@ -199,11 +186,10 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
-                #print(f"{self.name}: SUCCESS! mem_pos = {self._qmem_positions[0]}")
                 #print(f"{self.name}: SUCCESS / time: {sim_time()}")
-                qubit1 = self.node.qmemory.peek(positions=[self._qmem_positions[0]])
+                #qubit1 = self.node.qmemory.peek(positions=[self._qmem_positions[0]])
                 #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-                dm0 = ns.qubits.reduced_dm(qubit1[0])
+                #dm0 = ns.qubits.reduced_dm(qubit1[0])
                 #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
             else:
                 # FAILURE
@@ -262,11 +248,10 @@ class BellMeasurement(NodeProtocol):
             source_protocol = expr_port.atomic_source
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
             self._qmem_pos1 = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos1}")
             #print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
-            qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos1])
+            #qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos1])
             #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-            dm0 = ns.qubits.reduced_dm(qubit1[0])
+            #dm0 = ns.qubits.reduced_dm(qubit1[0])
             #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
             while not self.node.qmemory.unused_positions:
                 yield self.await_timer(1)
@@ -275,14 +260,11 @@ class BellMeasurement(NodeProtocol):
             expr_signal = self.await_program(self.node.qmemory)
             yield expr_signal
             qubit_initialised = True
-            #print(f"{self.name}: Initqubit received at {self._qmem_pos0}")
             #print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
-            qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos0])
+            #qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos0])
             #print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
-            dm1 = ns.qubits.reduced_dm(qubit0[0])
+            #dm1 = ns.qubits.reduced_dm(qubit0[0])
             #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
-            if self.node.name == 'node_A':
-                yield self.await_timer(20000)
             if qubit_initialised and entanglement_ready:
                 self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
                 self.node.qmemory.operate(ns.H, self._qmem_pos0)
@@ -305,10 +287,10 @@ class Correction(NodeProtocol):
 
     def run(self):
         port_alice = self.node.ports["cin_alice"]
-        expr_signal = self.start_expression
         entanglement_ready = False
         meas_results = None
         while True:
+            expr_signal = self.start_expression
             expr = yield (self.await_port_input(port_alice) | expr_signal)
             if expr.first_term.value:
                 meas_results = port_alice.rx_input().items
@@ -319,19 +301,19 @@ class Correction(NodeProtocol):
                 ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
                 self._qmem_pos = ready_signal.result
                 #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
-                qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                #qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos])
                 #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-                dm0 = ns.qubits.reduced_dm(qubit1[0])
+                #dm0 = ns.qubits.reduced_dm(qubit1[0])
                 #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
-                if meas_results[1] == 0:
+                if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
-                qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
+                #qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
                 #print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
-                dm1 = ns.qubits.reduced_dm(qubit0[0])
+                #dm1 = ns.qubits.reduced_dm(qubit0[0])
                 #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
                 #print(f"{self.name}: Teleport success / time: {sim_time()}")
@@ -390,7 +372,7 @@ class DistilExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=5000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -398,7 +380,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    state_sampler = StateSampler([ks.b01, ks.s00],
+    state_sampler = StateSampler([ks.b00, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,

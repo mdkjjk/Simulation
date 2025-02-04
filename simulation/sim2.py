@@ -261,10 +261,10 @@ class Correction(NodeProtocol):
 
     def run(self):
         port_alice = self.node.ports["cin_alice"]
-        expr_signal = self.start_expression
         entanglement_ready = False
         meas_results = None
         while True:
+            expr_signal = self.start_expression
             expr = yield (self.await_port_input(port_alice) | expr_signal)
             if expr.first_term.value:
                 meas_results = port_alice.rx_input().items

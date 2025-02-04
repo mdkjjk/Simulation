@@ -451,10 +451,10 @@ class Correction(NodeProtocol):
 
     def run(self):
         port_alice = self.node.ports["cin_alice"]
-        expr_signal = self.start_expression
         entanglement_ready = False
         meas_results = None
         while True:
+            expr_signal = self.start_expression
             expr = yield (self.await_port_input(port_alice) | expr_signal)
             if expr.first_term.value:
                 meas_results = port_alice.rx_input().items
@@ -638,7 +638,7 @@ def run_experiment(node_distances):
         network = example_network_setup(node_distance=node_distance)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
-        example, dc = example_sim_setup(node_a, node_b, 1)
+        example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe

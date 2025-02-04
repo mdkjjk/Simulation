@@ -32,13 +32,6 @@ from netsquid.qubits.qformalism import QFormalism
 
 #ns.set_qstate_formalism(QFormalism.DM)
 
-__all__ = [
-    "Distil",
-    "DistilExample",
-    "example_network_setup",
-    "example_sim_setup",
-]
-
 
 class Distil(NodeProtocol):
     """Protocol that does local DEJMPS distillation on a node.
@@ -174,9 +167,6 @@ class Distil(NodeProtocol):
         # We perform local DEJMPS
         yield self.node.qmemory.execute_program(self._program, [pos1, pos2])  # If instruction not instant
         self.local_meas_result = self._program.output["m"][0]
-        is_empty0 = self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
-        is_empty1 = self.node.qmemory.mem_positions[self._qmem_positions[1]].is_empty
-        #print(f"{self.name}: mem_pos0 = {is_empty1}, mem_pos1 = {is_empty0}")
         self._qmem_positions[1] = None
         #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         # Send local results to the remote node to allow it to check for success.
