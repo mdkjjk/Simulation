@@ -46,7 +46,7 @@ plt.errorbar(xcolumn, data3['fidelity'], yerr=data3['sem'], marker="o", label='D
 plt.errorbar(xcolumn, data4['fidelity'], yerr=data4['sem'], marker="o", label='Distil&Filtering')
 
 
-plt.xlabel('node_distance')
+plt.xlabel('node_distance [km]')
 plt.ylabel('Fidelity')
 plt.title('Fidelity of entanglement')
 plt.legend()
@@ -61,7 +61,7 @@ plt.errorbar(xcolumn, data22['fidelity'], yerr=data22['sem'], marker="o", label=
 plt.errorbar(xcolumn, data33['fidelity'], yerr=data33['sem'], marker="o", label='Distil')
 plt.errorbar(xcolumn, data44['fidelity'], yerr=data44['sem'], marker="o", label='Distil&Filtering')
 
-plt.xlabel('node_distance')
+plt.xlabel('node_distance [km]')
 plt.ylabel('Fidelity')
 plt.title('Fidelity of teleportation')
 plt.legend()
@@ -76,7 +76,7 @@ plt.errorbar(xcolumn, time2['time'], yerr=time2['sem'], marker="o", label='Filte
 plt.errorbar(xcolumn, time3['time'], yerr=time3['sem'], marker="o", label='Distil')
 plt.errorbar(xcolumn, time4['time'], yerr=time4['sem'], marker="o", label='Distil&Filtering')
 
-plt.xlabel('node_distance')
+plt.xlabel('node_distance [km]')
 plt.ylabel('Time [ns]')
 plt.title('Average time')
 plt.legend()
