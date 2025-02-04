@@ -369,7 +369,7 @@ class DistilExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=1.0, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
                           node_distance=30):
     network = Network("network")
 
@@ -456,34 +456,34 @@ def example_sim_setup(node_a, node_b, num_runs):
     return filt_example, dc
 
 
-def run_experiment(node_distances):
+def run_experiment(depolar_rates):
     fidelity_data = pandas.DataFrame()
-    for node_distance in node_distances:
+    for depolar_rate in depolar_rates:
         ns.sim_reset()
-        network = example_network_setup(node_distance=node_distance)
+        network = example_network_setup(depolar_rate=depolar_rate)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
         example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
-        df['node_distance'] = node_distance
+        df['depolar_rate'] = depolar_rate
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
 def create_plot():
     matplotlib.use('Agg')
-    node_distances = [1 + i for i in range(0, 100, 5)]
-    fidelities = run_experiment(node_distances)
+    depolar_rates = [100 * i for i in range(1, 100, 5)]
+    fidelities = run_experiment(depolar_rates)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of the teleported quantum state with distil"}
-    data = fidelities.groupby("node_distance")['F2'].agg(
+    data = fidelities.groupby("depolar_rate")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/ket&sf100"
+    save_dir = "./plots_clean/noise"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil_Teleportation")])
     filename = f"{save_dir}/Distil_Teleportation fidelity_{existing_files + 1}.png"
-    data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
+    data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
     fidelities.to_csv(f"{save_dir}/Distil_Teleportation fidelity_{existing_files + 2}.csv")
