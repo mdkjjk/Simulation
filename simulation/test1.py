@@ -116,34 +116,34 @@ def example_sim_setup(node_a, node_b, num_runs):
     return example, dc
 
 
-def run_experiment_node(node_distances):
+def run_experiment(source_fidelity):
     fidelity_data = pandas.DataFrame()
-    for node_distance in node_distances:
+    for source_fidelity_sq in source_fidelity:
         ns.sim_reset()
-        network = example_network_setup(node_distance=node_distance)
+        network = example_network_setup(source_fidelity_sq=source_fidelity_sq)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
         example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
-        df['node_distance'] = node_distance
+        df['source_fidelity'] = source_fidelity_sq
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
-def create_plot_node():
+def create_plot():
     matplotlib.use('Agg')
-    node_distances = [1 + i for i in range(0, 100, 5)]
-    fidelities = run_experiment_node(node_distances)
+    source_fidelity = [0.1 * i for i in range(0, 11, 1)]
+    fidelities = run_experiment(source_fidelity)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of entanglement"}
-    data = fidelities.groupby("node_distance")['F2'].agg(
+    data = fidelities.groupby("source_fidelity")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/ket&sf100"
+    save_dir = "./plots_clean/sfidelity"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Entanglement")])
     filename = f"{save_dir}/Original_Entanglement fidelity_{existing_files + 1}.png"
-    data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
+    data.plot(x='source_fidelity', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
     fidelities.to_csv(f"{save_dir}/Original_Entanglement fidelity_{existing_files + 2}.csv")
@@ -187,4 +187,4 @@ if __name__ == "__main__":
     #example.start()
     #ns.sim_run()
     #print("Average fidelity of generated entanglement: {}".format(dc.dataframe["F2"].mean()))
-    create_plot_depolar()
+    create_plot()

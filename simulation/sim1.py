@@ -253,34 +253,34 @@ def example_sim_setup(node_a, node_b, num_runs):
     return example, dc
 
 
-def run_experiment(depolar_rates):
+def run_experiment(source_fidelity):
     fidelity_data = pandas.DataFrame()
-    for depolar_rate in depolar_rates:
+    for source_fidelity_sq in source_fidelity:
         ns.sim_reset()
-        network = example_network_setup(depolar_rate=depolar_rate)
+        network = example_network_setup(source_fidelity_sq=source_fidelity_sq)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
         example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
-        df['depolar_rate'] = depolar_rate
+        df['source_fidelity'] = source_fidelity_sq
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
 def create_plot():
     matplotlib.use('Agg')
-    depolar_rates = [100 * i for i in range(1, 100, 5)]
-    fidelities = run_experiment(depolar_rates)
+    source_fidelity = [0.1 * i for i in range(0, 11, 1)]
+    fidelities = run_experiment(source_fidelity)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of the teleported quantum state"}
-    data = fidelities.groupby("depolar_rate")['F2'].agg(
+    data = fidelities.groupby("source_fidelity")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/noise"
+    save_dir = "./plots_clean/sfidelity"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Teleportation")])
     filename = f"{save_dir}/Original_Teleportation fidelity_{existing_files + 1}.png"
-    data.plot(x='depolar_rate', y='fidelity', yerr='sem', **plot_style)
+    data.plot(x='source_fidelity', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
     fidelities.to_csv(f"{save_dir}/Original_Teleportation fidelity_{existing_files + 2}.csv")

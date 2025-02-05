@@ -3,34 +3,34 @@ import matplotlib, os
 import matplotlib.pyplot as plt
 
 matplotlib.use('Agg')
-input_csv1 = pd.read_csv("./plots_clean/noise/Original_Entanglement fidelity_2.csv")
-input_csv2 = pd.read_csv("./plots_clean/noise/Filtering_Entanglement fidelity_2.csv")
-input_csv3 = pd.read_csv("./plots_clean/noise/Distil_Entanglement fidelity_2.csv")
-input_csv4 = pd.read_csv("./plots_clean/noise/Distil&Filtering_Entanglement fidelity_2.csv")
+input_csv1 = pd.read_csv("./plots_clean/sfidelity/Original_Entanglement fidelity_2.csv")
+input_csv2 = pd.read_csv("./plots_clean/sfidelity/Filtering_Entanglement fidelity_2.csv")
+input_csv3 = pd.read_csv("./plots_clean/sfidelity/Distil_Entanglement fidelity_2.csv")
+input_csv4 = pd.read_csv("./plots_clean/sfidelity/Distil&Filtering_Entanglement fidelity_2.csv")
 
-input_csv11 = pd.read_csv("./plots_clean/noise/Original_Teleportation fidelity_2.csv")
-input_csv22 = pd.read_csv("./plots_clean/noise/Filtering_Teleportation fidelity_2.csv")
-input_csv33 = pd.read_csv("./plots_clean/noise/Distil_Teleportation fidelity_2.csv")
-input_csv44 = pd.read_csv("./plots_clean/noise/Distil&Filtering_Teleportation fidelity_2.csv")
+input_csv11 = pd.read_csv("./plots_clean/sfidelity/Original_Teleportation fidelity_2.csv")
+input_csv22 = pd.read_csv("./plots_clean/sfidelity/Filtering_Teleportation fidelity_2.csv")
+input_csv33 = pd.read_csv("./plots_clean/sfidelity/Distil_Teleportation fidelity_2.csv")
+input_csv44 = pd.read_csv("./plots_clean/sfidelity/Distil&Filtering_Teleportation fidelity_2.csv")
 
-data1 = input_csv1.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data2 = input_csv2.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data3 = input_csv3.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data4 = input_csv4.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data1 = input_csv1.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data2 = input_csv2.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data3 = input_csv3.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data4 = input_csv4.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
 
-data11 = input_csv11.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data22 = input_csv22.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data33 = input_csv33.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
-data44 = input_csv44.groupby("depolar_rate")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data11 = input_csv11.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data22 = input_csv22.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data33 = input_csv33.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
+data44 = input_csv44.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
 
-time1 = input_csv11.groupby("depolar_rate")['time'].agg(time='mean', sem='sem').reset_index()
-time2 = input_csv22.groupby("depolar_rate")['time'].agg(time='mean', sem='sem').reset_index()
-time3 = input_csv33.groupby("depolar_rate")['time'].agg(time='mean', sem='sem').reset_index()
-time4 = input_csv44.groupby("depolar_rate")['time'].agg(time='mean', sem='sem').reset_index()
+time1 = input_csv11.groupby("source_fidelity")['time'].agg(time='mean', sem='sem').reset_index()
+time2 = input_csv22.groupby("source_fidelity")['time'].agg(time='mean', sem='sem').reset_index()
+time3 = input_csv33.groupby("source_fidelity")['time'].agg(time='mean', sem='sem').reset_index()
+time4 = input_csv44.groupby("source_fidelity")['time'].agg(time='mean', sem='sem').reset_index()
 
-xcolumn = data11['depolar_rate']
+xcolumn = data11['source_fidelity']
 
-save_dir = "./plots_clean/noise"
+save_dir = "./plots_clean/sfidelity"
 existing_files1 = len([f for f in os.listdir(save_dir) if f.startswith("Result_entanglement")])
 existing_files2 = len([f for f in os.listdir(save_dir) if f.startswith("Result_teleportation")])
 existing_files3 = len([f for f in os.listdir(save_dir) if f.startswith("Result_time")])
@@ -46,7 +46,7 @@ plt.errorbar(xcolumn, data3['fidelity'], yerr=data3['sem'], marker="o", label='D
 plt.errorbar(xcolumn, data4['fidelity'], yerr=data4['sem'], marker="o", label='Distil&Filtering')
 
 
-plt.xlabel('depolar_rate [Hz]')
+plt.xlabel('source_fidelity')
 plt.ylabel('Fidelity')
 plt.title('Fidelity of entanglement')
 plt.legend()
@@ -61,7 +61,7 @@ plt.errorbar(xcolumn, data22['fidelity'], yerr=data22['sem'], marker="o", label=
 plt.errorbar(xcolumn, data33['fidelity'], yerr=data33['sem'], marker="o", label='Distil')
 plt.errorbar(xcolumn, data44['fidelity'], yerr=data44['sem'], marker="o", label='Distil&Filtering')
 
-plt.xlabel('depolar_rate [Hz]')
+plt.xlabel('source_fidelity')
 plt.ylabel('Fidelity')
 plt.title('Fidelity of teleportation')
 plt.legend()
@@ -76,7 +76,7 @@ plt.errorbar(xcolumn, time2['time'], yerr=time2['sem'], marker="o", label='Filte
 plt.errorbar(xcolumn, time3['time'], yerr=time3['sem'], marker="o", label='Distil')
 plt.errorbar(xcolumn, time4['time'], yerr=time4['sem'], marker="o", label='Distil&Filtering')
 
-plt.xlabel('depolar_rate [Hz]')
+plt.xlabel('source_fidelity')
 plt.ylabel('Time [ns]')
 plt.title('Average time')
 plt.legend()
