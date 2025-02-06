@@ -6,7 +6,6 @@ import pandas
 import matplotlib, os
 from matplotlib import pyplot as plt
 
-import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
 from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
 from netsquid.components.component import Message, Port

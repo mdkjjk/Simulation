@@ -6,7 +6,6 @@ import pandas
 import matplotlib, os
 from matplotlib import pyplot as plt
 
-import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
 from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
 from netsquid.components.component import Message, Port
@@ -17,8 +16,6 @@ from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayMo
 from netsquid.components.models import DepolarNoiseModel
 from netsquid.util.simtools import sim_time
 from netsquid.util.datacollector import DataCollector
-from netsquid.qubits.ketutil import outerprod
-from netsquid.qubits.ketstates import s0, s1
 from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits import ketstates as ks
@@ -173,9 +170,6 @@ class Distil(NodeProtocol):
         # We perform local DEJMPS
         yield self.node.qmemory.execute_program(self._program, [pos1, pos2])  # If instruction not instant
         self.local_meas_result = self._program.output["m"][0]
-        is_empty0 = self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
-        is_empty1 = self.node.qmemory.mem_positions[self._qmem_positions[1]].is_empty
-        #print(f"{self.name}: mem_pos0 = {is_empty1}, mem_pos1 = {is_empty0}")
         self._qmem_positions[1] = None
         #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         # Send local results to the remote node to allow it to check for success.
