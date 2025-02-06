@@ -1,0 +1,5 @@
+QFormalism = KET
+node_distance = 1~96
+depolar_rate = 1500
+source_fidelity = 0.8
+entanglement = b00

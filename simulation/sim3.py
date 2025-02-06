@@ -430,34 +430,34 @@ def example_sim_setup(node_a, node_b, num_runs):
     return filt_example, dc
 
 
-def run_experiment(source_fidelity):
+def run_experiment(node_distances):
     fidelity_data = pandas.DataFrame()
-    for source_fidelity_sq in source_fidelity:
+    for node_distance in node_distances:
         ns.sim_reset()
-        network = example_network_setup(source_fidelity_sq=source_fidelity_sq)
+        network = example_network_setup(node_distance=node_distance)
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
         example, dc = example_sim_setup(node_a, node_b, 1000)
         example.start()
         ns.sim_run()
         df = dc.dataframe
-        df['source_fidelity'] = source_fidelity_sq
+        df['node_distance'] = node_distance
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
 def create_plot():
     matplotlib.use('Agg')
-    source_fidelity = [0.1 * i for i in range(0, 11, 1)]
-    fidelities = run_experiment(source_fidelity)
+    node_distances = [1 + i for i in range(0, 100, 5)]
+    fidelities = run_experiment(node_distances)
     plot_style = {'kind': 'scatter', 'grid': True,
                   'title': "Fidelity of the teleported quantum state with distil"}
-    data = fidelities.groupby("source_fidelity")['F2'].agg(
+    data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/sf1500"
+    save_dir = "./plots_clean/node1500"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil_Teleportation")])
     filename = f"{save_dir}/Distil_Teleportation fidelity_{existing_files + 1}.png"
-    data.plot(x='source_fidelity', y='fidelity', yerr='sem', **plot_style)
+    data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
     plt.savefig(filename)
     print(f"Plot saved as {filename}")
     fidelities.to_csv(f"{save_dir}/Distil_Teleportation fidelity_{existing_files + 2}.csv")

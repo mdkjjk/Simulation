@@ -98,14 +98,14 @@ class Filter(NodeProtocol):
                 classical_message = self.port.rx_input(header=self.header)
                 if classical_message:
                     self.remote_qcount, self.remote_meas_OK = classical_message.items
-                    print(f"{self.name}: Result received at {classical_message} / time: {sim_time()}")
+                    #print(f"{self.name}: Result received at {classical_message} / time: {sim_time()}")
                     self._handle_cchannel_rx()
             elif expr.second_term.value:
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
                 self._qmem_pos = ready_signal.result
-                print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
+                #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
                 yield from self._handle_qubit_rx()
 
     # TODO does start reset vars?
@@ -151,7 +151,7 @@ class Filter(NodeProtocol):
                 self.local_meas_OK and self.remote_meas_OK):
             # SUCCESS!
             self.send_signal(Signals.SUCCESS, self._qmem_pos)
-            print(f"{self.name}: SUCCESS / time: {sim_time()}")
+            #print(f"{self.name}: SUCCESS / time: {sim_time()}")
         elif self.local_meas_OK and self.local_qcount > self.remote_qcount:
             # Need to wait for latest remote status
             pass
@@ -159,7 +159,7 @@ class Filter(NodeProtocol):
             # FAILURE
             self._handle_fail()
             self.send_signal(Signals.FAIL, self.local_qcount)
-            print(f"{self.name}: FAIL / time: {sim_time()}")
+            #print(f"{self.name}: FAIL / time: {sim_time()}")
 
     def _handle_fail(self):
         if self.node.qmemory.mem_positions[self._qmem_pos].in_use:
@@ -213,13 +213,13 @@ class BellMeasurement(NodeProtocol):
             source_protocol = expr_port.atomic_source
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
             self._qmem_pos1 = ready_signal.result
-            print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
+            #print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
             self._qmem_pos0 = self.node.qmemory.unused_positions[0]
             self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
             expr_signal = self.await_program(self.node.qmemory)
             yield expr_signal
             qubit_initialised = True
-            print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
+            #print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
             if qubit_initialised and entanglement_ready:
                 self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
                 self.node.qmemory.operate(ns.H, self._qmem_pos0)
@@ -229,7 +229,7 @@ class BellMeasurement(NodeProtocol):
                 result = {"pos_A0": self._qmem_pos0,
                           "pos_A1": self._qmem_pos1,}
                 self.send_signal(Signals.SUCCESS, result)
-                print(f"{self.name}: Finish / time: {sim_time()}")
+                #print(f"{self.name}: Finish / time: {sim_time()}")
                 qubit_initialised = False
                 entanglement_ready = False
 
@@ -249,13 +249,13 @@ class Correction(NodeProtocol):
             expr = yield (self.await_port_input(port_alice) | expr_signal)
             if expr.first_term.value:
                 meas_results = port_alice.rx_input().items
-                print(f"{self.name}: Result: {meas_results} / time: {sim_time()}")
+                #print(f"{self.name}: Result: {meas_results} / time: {sim_time()}")
             else:
                 entanglement_ready = True
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
                 self._qmem_pos = ready_signal.result
-                print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
+                #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
@@ -263,7 +263,7 @@ class Correction(NodeProtocol):
                 if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
-                print(f"{self.name}: Teleport success / time: {sim_time()}")
+                #print(f"{self.name}: Teleport success / time: {sim_time()}")
                 entanglement_ready = False
                 meas_results = None
 
@@ -366,8 +366,8 @@ class FilteringExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
-                          node_distance=1):
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
+                          node_distance=30):
     network = Network("network")
 
     node_a, node_b = network.add_nodes(["node_A", "node_B"])
@@ -444,7 +444,7 @@ def example_sim_setup(node_a, node_b, num_runs):
         node_a.qmemory.pop(positions=[result["pos_A1"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
         f2 = qapi.fidelity(q_B, ks.y0, squared=True)
-        print(f"{result["time"]}: pairs = {result["pairs"]}, fidelity = {f2}")
+        #print(f"{result["time"]}: pairs = {result["pairs"]}, fidelity = {f2}")
         return {"F2": f2, "pairs": result["pairs"], "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -478,7 +478,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with filtering"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/node"
+    save_dir = "./plots_clean/node1500"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Teleportation")])
     filename = f"{save_dir}/Filtering_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
@@ -488,9 +488,9 @@ def create_plot():
 
 
 if __name__ == "__main__":
-    network = example_network_setup()
-    filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
-    filt_example.start()
-    ns.sim_run()
-    print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
-    #create_plot()
+    #network = example_network_setup()
+    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
+    #filt_example.start()
+    #ns.sim_run()
+    #print("Average fidelity of generated entanglement with filtering: {}".format(dc.dataframe["F2"].mean()))
+    create_plot()
