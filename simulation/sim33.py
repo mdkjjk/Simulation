@@ -28,9 +28,6 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
-from netsquid.qubits.qformalism import QFormalism
-
-#ns.set_qstate_formalism(QFormalism.DM)
 
 
 class Distil(NodeProtocol):
@@ -106,11 +103,12 @@ class Distil(NodeProtocol):
                 classical_message = self.port.rx_input(header=self.header)
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
+                    #print(f"{self.name}: Result received at {classical_message} / time: {sim_time()}")
             elif expr.second_term.value:
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
-                #print(f"{self.name}: entanglement received at {ready_signal.result}")
+                #print(f"{self.name}: Entanglement received at {ready_signal.result} / time: {sim_time()}")
                 yield from self._handle_new_qubit(ready_signal.result)
             self._check_success()
 
@@ -181,12 +179,12 @@ class Distil(NodeProtocol):
             if self.local_meas_result == self.remote_meas_result:
                 # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
-                #print(f"{self.name}: SUCCESS! mem_pos = {self._qmem_positions[0]}")
+                #print(f"{self.name}: SUCCESS / time: {sim_time()}")
             else:
                 # FAILURE
-                #print(f"{self.name}: FAIL!")
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
+                #print(f"{self.name}: FAIL / time: {sim_time()}")
             self.local_meas_result = None
             self.remote_meas_result = None
             self._qmem_positions = [None, None]
@@ -239,15 +237,13 @@ class BellMeasurement(NodeProtocol):
             source_protocol = expr_port.atomic_source
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
             self._qmem_pos1 = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos1}")
-            while not self.node.qmemory.unused_positions:
-                yield self.await_timer(1)
+            #print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
             self._qmem_pos0 = self.node.qmemory.unused_positions[0]
             self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
             expr_signal = self.await_program(self.node.qmemory)
             yield expr_signal
             qubit_initialised = True
-            #print(f"{self.name}: Initqubit received at {self._qmem_pos0}")
+            #print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
             if qubit_initialised and entanglement_ready:
                 self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
                 self.node.qmemory.operate(ns.H, self._qmem_pos0)
@@ -257,7 +253,7 @@ class BellMeasurement(NodeProtocol):
                 result = {"pos_A0": self._qmem_pos0,
                           "pos_A1": self._qmem_pos1,}
                 self.send_signal(Signals.SUCCESS, result)
-                #print(f"{self.name}: Finish")
+                #print(f"{self.name}: Finish / time: {sim_time()}")
                 qubit_initialised = False
                 entanglement_ready = False
 
@@ -273,18 +269,17 @@ class Correction(NodeProtocol):
         entanglement_ready = False
         meas_results = None
         while True:
-            #print(f"{self.name}: Start")
             expr_signal = self.start_expression
-            yield expr_signal
-            entanglement_ready = True
-            source_protocol = expr_signal.atomic_source
-            ready_signal = source_protocol.get_signal_by_event(event=expr_signal.triggered_events[0], receiver=self)
-            self._qmem_pos = ready_signal.result
-            #print(f"{self.name}: Entanglement received at {self._qmem_pos}")
-            evexpr_port_a = self.await_port_input(port_alice)
-            yield evexpr_port_a
-            meas_results = port_alice.rx_input().items
-            #print(f"{self.name}: Result received")
+            expr = yield (self.await_port_input(port_alice) | expr_signal)
+            if expr.first_term.value:
+                meas_results = port_alice.rx_input().items
+                #print(f"{self.name}: Result: {meas_results} / time: {sim_time()}")
+            else:
+                entanglement_ready = True
+                source_protocol = expr.second_term.atomic_source
+                ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
+                self._qmem_pos = ready_signal.result
+                #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
@@ -292,7 +287,7 @@ class Correction(NodeProtocol):
                 if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
-                #print(f"{self.name}: Teleport success")
+                #print(f"{self.name}: Teleport success / time: {sim_time()}")
                 entanglement_ready = False
                 meas_results = None
 
@@ -306,8 +301,8 @@ class DistilExample(LocalProtocol):
         self.add_subprotocol(
             EntangleNodes(node=node_b, role="receiver", input_mem_pos=0, num_pairs=2,
                           name="entangle_B"))
-        self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob"], role="A", name="purify_A"))
-        self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice"], role="B", name="purify_B"))
+        self.add_subprotocol(Distil(node_a, node_a.ports["cout_bob_dis"], role="A", name="purify_A"))
+        self.add_subprotocol(Distil(node_b, node_b.ports["cin_alice_dis"], role="B", name="purify_B"))
         self.add_subprotocol(BellMeasurement(node=node_a, port=node_a.ports["cout_bob"], name="teleport_A"))
         self.add_subprotocol(Correction(node=node_b, name="teleport_B"))
         self.subprotocols["purify_A"].start_expression = (
@@ -348,7 +343,7 @@ class DistilExample(LocalProtocol):
             #print(f"Simulation {i}: Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
                           node_distance=30):
     network = Network("network")
 
@@ -356,8 +351,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    state_sampler = StateSampler(
-        [ks.b00, ks.s00],
+    state_sampler = StateSampler([ks.b00, ks.s00],
         probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
@@ -366,13 +360,27 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     node_b.add_subcomponent(QuantumProcessor(
         "QuantumMemory_B", num_positions=2, fallback_to_nonphysical=True,
         memory_noise_models=DepolarNoiseModel(0)))
-    conn_cchannel = DirectConnection(
-        "CChannelConn_AB",
-        ClassicalChannel("CChannel_A->B", length=node_distance,
+    node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
+    node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
+
+    conn_cchannel_dis = DirectConnection("CChannelConn_dis_AB",
+        ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
-        ClassicalChannel("CChannel_B->A", length=node_distance,
+        ClassicalChannel("CChannel_dis_B->A", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}))
-    network.add_connection(node_a, node_b, connection=conn_cchannel, port_name_node1="cout_bob", port_name_node2="cin_alice")
+    network.add_connection(node_a, node_b, connection=conn_cchannel_dis, label="distil",
+                           port_name_node1="cout_bob_dis", port_name_node2="cin_alice_dis")
+    conn_cchannel_fil = DirectConnection("CChannelConn_fil_AB",
+        ClassicalChannel("CChannel_fil_A->B", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}),
+        ClassicalChannel("CChannel_fil_B->A", length=node_distance,
+                         models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=conn_cchannel_fil, label="filter",
+                           port_name_node1="cout_bob_fil", port_name_node2="cin_alice_fil")
+    cchannel = DirectConnection("CChannelConn_tel", ClassicalChannel("CChannel_dis_A->B", length=node_distance,
+                                models={"delay_model": FibreDelayModel(c=200e3)}))
+    network.add_connection(node_a, node_b, connection=cchannel, label="tereport",
+                           port_name_node1="cout_bob", port_name_node2="cin_alice")
     # node_A.connect_to(node_B, conn_cchannel)
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
@@ -380,6 +388,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
                               depolar_rate=0)
     port_name_a, port_name_b = network.add_connection(
         node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
+
     # Link Alice ports:
     node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(
         node_a.ports[port_name_a])
@@ -445,7 +454,7 @@ def create_plot():
                   'title': "Fidelity of the teleported quantum state with distil"}
     data = fidelities.groupby("node_distance")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_kets0"
+    save_dir = "./plots_clean/node1500"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Distil_Teleportation")])
     filename = f"{save_dir}/Distil_Teleportation fidelity_{existing_files + 1}.png"
     data.plot(x='node_distance', y='fidelity', yerr='sem', **plot_style)
@@ -456,7 +465,7 @@ def create_plot():
 
 if __name__ == "__main__":
     #network = example_network_setup()
-    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1000)
+    #filt_example, dc = example_sim_setup(network.get_node("node_A"),network.get_node("node_B"),num_runs=1)
     #filt_example.start()
     #ns.sim_run()
     #print("Average fidelity of generated entanglement with distil: {}".format(dc.dataframe["F2"].mean()))
