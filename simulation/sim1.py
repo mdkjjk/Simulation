@@ -3,14 +3,11 @@
 import netsquid as ns
 import pydynaa as pd
 import pandas
-import numpy as np
 import matplotlib, os
 from matplotlib import pyplot as plt
 
 import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
-from netsquid.components.instructions import INSTR_MEASURE, INSTR_CNOT, IGate
-from netsquid.components.component import Message, Port
 from netsquid.components.qsource import QSource, SourceStatus
 from netsquid.components.qprocessor import QuantumProcessor
 from netsquid.components.qprogram import QuantumProgram
@@ -18,15 +15,11 @@ from netsquid.components.models.delaymodels import FixedDelayModel, FibreDelayMo
 from netsquid.components.models import DepolarNoiseModel
 from netsquid.util.simtools import sim_time
 from netsquid.util.datacollector import DataCollector
-from netsquid.qubits.ketutil import outerprod
-from netsquid.qubits.ketstates import s0, s1
-from netsquid.qubits import operators as ops
 from netsquid.qubits import qubitapi as qapi
 from netsquid.qubits import ketstates as ks
 from netsquid.qubits.state_sampler import StateSampler
 from netsquid.protocols.nodeprotocols import NodeProtocol, LocalProtocol
 from netsquid.protocols.protocol import Signals
-from netsquid.nodes.node import Node
 from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
@@ -68,21 +61,12 @@ class BellMeasurement(NodeProtocol):
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
             self._qmem_pos1 = ready_signal.result
             #print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
-            #qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos1])
-            #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-            #dm0 = ns.qubits.reduced_dm(qubit1[0])
-            #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
             self._qmem_pos0 = self.node.qmemory.unused_positions[0]
             self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
             expr_signal = self.await_program(self.node.qmemory)
             yield expr_signal
             qubit_initialised = True
             #print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
-            #qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos0])
-            #print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
-            #dm1 = ns.qubits.reduced_dm(qubit0[0])
-            #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
-            yield self.await_timer(160000)
             if qubit_initialised and entanglement_ready:
                 self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
                 self.node.qmemory.operate(ns.H, self._qmem_pos0)
@@ -119,20 +103,12 @@ class Correction(NodeProtocol):
                 ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
                 self._qmem_pos = ready_signal.result
                 #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
-                #qubit1 = self.node.qmemory.peek(positions=[self._qmem_pos])
-                #print(f"{self.name}: DM = {qubit1[0].qstate.qrepr}")
-                #dm0 = ns.qubits.reduced_dm(qubit1[0])
-                #print(f"{self.name}: dm * dm = {np.dot(dm0, dm0)}")
             if meas_results is not None and entanglement_ready:
                 # Do corrections (blocking)
                 if meas_results[0] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
                 if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
-                #qubit0 = self.node.qmemory.peek(positions=[self._qmem_pos])
-                #print(f"{self.name}: DM = {qubit0[0].qstate.qrepr}")
-                #dm1 = ns.qubits.reduced_dm(qubit0[0])
-                #print(f"{self.name}: dm * dm = {np.dot(dm1, dm1)}")
                 self.send_signal(Signals.SUCCESS, self._qmem_pos)
                 #print(f"{self.name}: Teleport success / time: {sim_time()}")
                 entanglement_ready = False
@@ -176,7 +152,7 @@ class Example(LocalProtocol):
             #print(f"Simulation {i} Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
                           node_distance=30):
     network = Network("network")
 

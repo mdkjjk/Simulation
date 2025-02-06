@@ -3,15 +3,15 @@ import matplotlib, os
 import matplotlib.pyplot as plt
 
 matplotlib.use('Agg')
-input_csv1 = pd.read_csv("./plots_clean/sfidelity/Original_Entanglement fidelity_2.csv")
-input_csv2 = pd.read_csv("./plots_clean/sfidelity/Filtering_Entanglement fidelity_2.csv")
-input_csv3 = pd.read_csv("./plots_clean/sfidelity/Distil_Entanglement fidelity_2.csv")
-input_csv4 = pd.read_csv("./plots_clean/sfidelity/Distil&Filtering_Entanglement fidelity_2.csv")
+input_csv1 = pd.read_csv("./plots_clean/sf1500/Original_Entanglement fidelity_2.csv")
+input_csv2 = pd.read_csv("./plots_clean/sf1500/Filtering_Entanglement fidelity_2.csv")
+input_csv3 = pd.read_csv("./plots_clean/sf1500/Distil_Entanglement fidelity_2.csv")
+input_csv4 = pd.read_csv("./plots_clean/sf1500/Distil&Filtering_Entanglement fidelity_2.csv")
 
-input_csv11 = pd.read_csv("./plots_clean/sfidelity/Original_Teleportation fidelity_2.csv")
-input_csv22 = pd.read_csv("./plots_clean/sfidelity/Filtering_Teleportation fidelity_2.csv")
-input_csv33 = pd.read_csv("./plots_clean/sfidelity/Distil_Teleportation fidelity_2.csv")
-input_csv44 = pd.read_csv("./plots_clean/sfidelity/Distil&Filtering_Teleportation fidelity_2.csv")
+input_csv11 = pd.read_csv("./plots_clean/sf1500/Original_Teleportation fidelity_2.csv")
+input_csv22 = pd.read_csv("./plots_clean/sf1500/Filtering_Teleportation fidelity_2.csv")
+input_csv33 = pd.read_csv("./plots_clean/sf1500/Distil_Teleportation fidelity_2.csv")
+input_csv44 = pd.read_csv("./plots_clean/sf1500/Distil&Filtering_Teleportation fidelity_2.csv")
 
 data1 = input_csv1.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
 data2 = input_csv2.groupby("source_fidelity")['F2'].agg(fidelity='mean', sem='sem').reset_index()
@@ -30,7 +30,7 @@ time4 = input_csv44.groupby("source_fidelity")['time'].agg(time='mean', sem='sem
 
 xcolumn = data11['source_fidelity']
 
-save_dir = "./plots_clean/sfidelity"
+save_dir = "./plots_clean/sf1500"
 existing_files1 = len([f for f in os.listdir(save_dir) if f.startswith("Result_entanglement")])
 existing_files2 = len([f for f in os.listdir(save_dir) if f.startswith("Result_teleportation")])
 existing_files3 = len([f for f in os.listdir(save_dir) if f.startswith("Result_time")])

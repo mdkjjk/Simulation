@@ -55,7 +55,7 @@ class Example(LocalProtocol):
             #print(f"Simulation {i} Finish")
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
                           node_distance=30):
     network = Network("network")
 
@@ -140,7 +140,7 @@ def create_plot():
                   'title': "Fidelity of entanglement"}
     data = fidelities.groupby("source_fidelity")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/sfidelity"
+    save_dir = "./plots_clean/sf1500"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Original_Entanglement")])
     filename = f"{save_dir}/Original_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='source_fidelity', y='fidelity', yerr='sem', **plot_style)

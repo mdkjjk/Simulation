@@ -196,7 +196,7 @@ class FilteringExample(LocalProtocol):
             self.send_signal(Signals.SUCCESS, result)
 
 
-def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=2000,
+def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
                           node_distance=30):
     network = Network("purify_network")
 
@@ -291,7 +291,7 @@ def create_plot():
                   'title': "Fidelity of entanglement with filtering"}
     data = fidelities.groupby("source_fidelity")['F2'].agg(
         fidelity='mean', sem='sem').reset_index()
-    save_dir = "./plots_clean/sfidelity"
+    save_dir = "./plots_clean/sf1500"
     existing_files = len([f for f in os.listdir(save_dir) if f.startswith("Filtering_Entanglement")])
     filename = f"{save_dir}/Filtering_Entanglement fidelity_{existing_files + 1}.png"
     data.plot(x='source_fidelity', y='fidelity', yerr='sem', **plot_style)
