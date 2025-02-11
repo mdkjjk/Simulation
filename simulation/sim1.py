@@ -1,4 +1,4 @@
-#量子テレポーテーション
+# シミュレーション：精製処理を適用しない場合の伝送忠実度の測定
 
 import netsquid as ns
 import pydynaa as pd
@@ -6,6 +6,7 @@ import pandas
 import matplotlib, os
 from matplotlib import pyplot as plt
 
+# 必要となるパッケージのインポート
 import netsquid.components.instructions as instr
 from netsquid.components import ClassicalChannel, QuantumChannel
 from netsquid.components.qsource import QSource, SourceStatus
@@ -26,7 +27,7 @@ from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
 
-class InitStateProgram(QuantumProgram):
+class InitStateProgram(QuantumProgram): # 伝送する量子ビットを生成するプログラム
     default_num_qubits = 1
 
     def program(self):
@@ -37,7 +38,7 @@ class InitStateProgram(QuantumProgram):
         yield self.run()
 
 
-class BellMeasurement(NodeProtocol):
+class BellMeasurement(NodeProtocol): # 量子テレポーテーションにおけるAlice側での処理を行うプロトコル
     def __init__(self, node, port, name=None):
         super().__init__(node, name)
         self.port = port
@@ -55,33 +56,36 @@ class BellMeasurement(NodeProtocol):
         qubit_init_program = InitStateProgram()
         while True:
             expr_port = self.start_expression
-            yield expr_port
+            yield expr_port # エンタングルメントの到着を待機
             entanglement_ready = True
             source_protocol = expr_port.atomic_source
             ready_signal = source_protocol.get_signal_by_event(event=expr_port.triggered_events[0], receiver=self)
-            self._qmem_pos1 = ready_signal.result
+            self._qmem_pos1 = ready_signal.result # エンタングルメントが保存された量子メモリポジションを取得
             #print(f"{self.name}: Entanglement received at {self._qmem_pos1} / time: {sim_time()}")
+
+            # 空いている量子メモリポジションで伝送する量子ビットを生成
             self._qmem_pos0 = self.node.qmemory.unused_positions[0]
             self.node.qmemory.execute_program(qubit_init_program, qubit_mapping=[self._qmem_pos0])
             expr_signal = self.await_program(self.node.qmemory)
-            yield expr_signal
+            yield expr_signal # 伝送する量子ビットの生成が完了するまで待機
             qubit_initialised = True
             #print(f"{self.name}: Initqubit received at {self._qmem_pos0} / time: {sim_time()}")
-            if qubit_initialised and entanglement_ready:
-                self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1])
-                self.node.qmemory.operate(ns.H, self._qmem_pos0)
-                m, _ = self.node.qmemory.measure([self._qmem_pos0, self._qmem_pos1])
-                # Send measurement results to Bob:
-                self.port.tx_output(m)
+
+            # 上記の2つが完了した場合
+            if qubit_initialised and entanglement_ready: 
+                self.node.qmemory.operate(ns.CNOT, [self._qmem_pos0, self._qmem_pos1]) # CNOTゲート適用
+                self.node.qmemory.operate(ns.H, self._qmem_pos0) # Hゲート適用
+                m, _ = self.node.qmemory.measure([self._qmem_pos0, self._qmem_pos1]) # 測定
+                self.port.tx_output(m) # 測定結果をBobへ送信
                 result = {"pos_A0": self._qmem_pos0,
                           "pos_A1": self._qmem_pos1,}
-                self.send_signal(Signals.SUCCESS, result)
+                self.send_signal(Signals.SUCCESS, result) # プロトコルの成功シグナルと使用しているメモリポジションを送信
                 #print(f"{self.name}: Finish / time: {sim_time()}")
                 qubit_initialised = False
                 entanglement_ready = False
 
 
-class Correction(NodeProtocol):
+class Correction(NodeProtocol): # 量子テレポーテーションにおけるBob側での処理を行うプロトコル
     def __init__(self, node, start_expression=None, name=None):
         super().__init__(node, name)
         self.start_expression = start_expression
@@ -93,75 +97,85 @@ class Correction(NodeProtocol):
         meas_results = None
         while True:
             expr_signal = self.start_expression
-            expr = yield (self.await_port_input(port_alice) | expr_signal)
+            expr = yield (self.await_port_input(port_alice) | expr_signal) # エンタングルメントの到着 or Aliceの測定結果の到着を待機
+
+            # Aliceの測定結果が到着した場合
             if expr.first_term.value:
-                meas_results = port_alice.rx_input().items
+                meas_results = port_alice.rx_input().items # 測定結果を取得
                 #print(f"{self.name}: Result: {meas_results} / time: {sim_time()}")
+            # エンタングルメントが到着した場合
             else:
                 entanglement_ready = True
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(event=expr.second_term.triggered_events[-1], receiver=self)
-                self._qmem_pos = ready_signal.result
+                self._qmem_pos = ready_signal.result # エンタングルメントが保存された量子メモリポジションを取得
                 #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
+
+            # 上記の2つが完了した場合
             if meas_results is not None and entanglement_ready:
-                # Do corrections (blocking)
+                # 測定結果に応じて、Z,Xゲートを適用
                 if meas_results[0] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_Z, [self._qmem_pos])
                 if meas_results[1] == 1:
                     self.node.qmemory.execute_instruction(instr.INSTR_X, [self._qmem_pos])
-                self.send_signal(Signals.SUCCESS, self._qmem_pos)
+                self.send_signal(Signals.SUCCESS, self._qmem_pos) # プロトコルの成功シグナルと使用しているメモリポジションを送信
                 #print(f"{self.name}: Teleport success / time: {sim_time()}")
                 entanglement_ready = False
                 meas_results = None
 
 
-class Example(LocalProtocol):
+class Example(LocalProtocol): # シミュレーション全体のプロトコル
     def __init__(self, node_a, node_b, num_runs):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="example")
         self.num_runs = num_runs
-        # Initialise sub-protocols
+        # 各ノードで実行するサブプロトコルを追加
         self.add_subprotocol(EntangleNodes(node=node_a, role="source", input_mem_pos=0,
                                            num_pairs=1, name="entangle_A"))
         self.add_subprotocol(EntangleNodes(node=node_b, role="receiver", input_mem_pos=0,
                                            num_pairs=1, name="entangle_B"))
         self.add_subprotocol(BellMeasurement(node=node_a, port=node_a.ports["cout_bob"], name="teleport_A"))
         self.add_subprotocol(Correction(node=node_b, name="teleport_B"))
-        # Set start expressions
+
+        # 各サブプロトコルの開始条件を設定
         self.subprotocols["entangle_A"].start_expression = self.subprotocols["entangle_A"].await_signal(self, Signals.WAITING)
         self.subprotocols["teleport_A"].start_expression = self.subprotocols["teleport_A"].await_signal(self.subprotocols["entangle_A"], Signals.SUCCESS)
         self.subprotocols["teleport_B"].start_expression = self.subprotocols["teleport_B"].await_signal(self.subprotocols["entangle_B"], Signals.SUCCESS)
 
     def run(self):
         self.start_subprotocols()
-        for i in range(self.num_runs):
+        for i in range(self.num_runs): # self.num_runsの回数シミュレーションを試行
             #print(f"Simulation {i} Start")
             start_time = sim_time()
             self.subprotocols["entangle_A"].entangled_pairs = 0
-            self.send_signal(Signals.WAITING)
+            self.send_signal(Signals.WAITING) # WAITINGシグナルにより、エンタングルメント生成が開始
+
             yield (self.await_signal(self.subprotocols["teleport_A"], Signals.SUCCESS) &
-                   self.await_signal(self.subprotocols["teleport_B"], Signals.SUCCESS))
-            resurl_A = self.subprotocols["teleport_A"].get_signal_result(Signals.SUCCESS, self)
+                   self.await_signal(self.subprotocols["teleport_B"], Signals.SUCCESS)) # 各ノードでのテレポーテーション処理が完了するまで待機
+            result_A = self.subprotocols["teleport_A"].get_signal_result(Signals.SUCCESS, self)
             signal_B = self.subprotocols["teleport_B"].get_signal_result(Signals.SUCCESS, self)
             result = {
-                "pos_A0": resurl_A["pos_A0"],
-                "pos_A1": resurl_A["pos_A1"],
+                "pos_A0": result_A["pos_A0"],
+                "pos_A1": result_A["pos_A1"],
                 "pos_B": signal_B,
                 "time": sim_time() - start_time,
             }
-            self.send_signal(Signals.SUCCESS, result)
+            self.send_signal(Signals.SUCCESS, result) # プロトコルの成功シグナルと使用しているメモリポジションを送信
             #print(f"Simulation {i} Finish")
 
 
 def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate=1500,
-                          node_distance=30):
+                          node_distance=30): # 量子ネットワークの構築
     network = Network("network")
 
-    node_a, node_b = network.add_nodes(["node_A", "node_B"])
+    node_a, node_b = network.add_nodes(["node_A", "node_B"]) # ノードの追加
+    # 各ノードにコンポーネントを追加
+    # ノードA: QuantumProcessor(量子メモリ), QSource(量子ソース)
+    # ノードB: QuantumProcessor(量子メモリ)
     node_a.add_subcomponent(QuantumProcessor(
         "QuantumMemory_A", num_positions=2, fallback_to_nonphysical=True,
-        memory_noise_models=DepolarNoiseModel(0)))
+        memory_noise_models=DepolarNoiseModel(0))) # メモリ数や、メモリに働くノイズを設定可能
     state_sampler = StateSampler([ks.b00, ks.s00],
-        probabilities=[source_fidelity_sq, 1 - source_fidelity_sq])
+        probabilities=[source_fidelity_sq, 1 - source_fidelity_sq]) # 量子ソースで生成される量子状態の設定
     node_a.add_subcomponent(QSource(
         "QSource_A", state_sampler=state_sampler,
         models={"emission_delay_model": FixedDelayModel(delay=source_delay)},
@@ -172,6 +186,7 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     node_a.add_ports(["cout_bob_dis", "cout_bob_fil"])
     node_b.add_ports(["cin_alice_dis", "cin_alice_fil"])
 
+    # 古典チャネルを接続
     conn_cchannel_dis = DirectConnection("CChannelConn_dis_AB",
         ClassicalChannel("CChannel_dis_A->B", length=node_distance,
                          models={"delay_model": FibreDelayModel(c=200e3)}),
@@ -190,7 +205,8 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
                                 models={"delay_model": FibreDelayModel(c=200e3)}))
     network.add_connection(node_a, node_b, connection=cchannel, label="tereport",
                            port_name_node1="cout_bob", port_name_node2="cin_alice")
-    # node_A.connect_to(node_B, conn_cchannel)
+
+    # 量子チャネルを接続
     qchannel = QuantumChannel("QChannel_A->B", length=node_distance,
                               models={"quantum_noise_model": DepolarNoiseModel(depolar_rate),
                                       "delay_model": FibreDelayModel(c=200e3)},
@@ -198,28 +214,25 @@ def example_network_setup(source_delay=1e5, source_fidelity_sq=0.8, depolar_rate
     port_name_a, port_name_b = network.add_connection(
         node_a, node_b, channel_to=qchannel, label="quantum", port_name_node1="qin_charlie", port_name_node2="qin_charlie")
 
-    # Link Alice ports:
+    # 量子ソースのポートを各ノードのメモリと接続
     node_a.subcomponents["QSource_A"].ports["qout1"].forward_output(
         node_a.ports[port_name_a])
     node_a.subcomponents["QSource_A"].ports["qout0"].connect(
         node_a.qmemory.ports["qin0"])
-    # Link Bob ports:
     node_b.ports[port_name_b].forward_input(node_b.qmemory.ports["qin0"])
     return network
 
 
-def example_sim_setup(node_a, node_b, num_runs):
+def example_sim_setup(node_a, node_b, num_runs): # シミュレーションの設定
     example = Example(node_a, node_b, num_runs=num_runs)
 
-    def record_run(evexpr):
-        # Callback that collects data each run
+    def record_run(evexpr): # 1回のシミュレーションが成功したら実行
         protocol = evexpr.triggered_events[-1].source
-        result = protocol.get_signal_result(Signals.SUCCESS)
-        # Record fidelity
-        node_a.qmemory.pop(positions=[result["pos_A0"]])
+        result = protocol.get_signal_result(Signals.SUCCESS) # Exampleプロトコルの結果を取得
+        node_a.qmemory.pop(positions=[result["pos_A0"]]) # popにより、使用しているメモリを解放
         node_a.qmemory.pop(positions=[result["pos_A1"]])
         q_B, = node_b.qmemory.pop(positions=[result["pos_B"]])
-        f2 = qapi.fidelity(q_B, ks.y0, squared=True)
+        f2 = qapi.fidelity(q_B, ks.y0, squared=True) # 忠実度の計算
         return {"F2": f2, "time": result["time"]}
 
     dc = DataCollector(record_run, include_time_stamp=False,
@@ -229,23 +242,23 @@ def example_sim_setup(node_a, node_b, num_runs):
     return example, dc
 
 
-def run_experiment(node_distances):
+def run_experiment(node_distances): # シミュレーションを実行するための関数
     fidelity_data = pandas.DataFrame()
     for node_distance in node_distances:
         ns.sim_reset()
-        network = example_network_setup(node_distance=node_distance)
+        network = example_network_setup(node_distance=node_distance) # ネットワーク構築
         node_a = network.get_node("node_A")
         node_b = network.get_node("node_B")
-        example, dc = example_sim_setup(node_a, node_b, 1000)
+        example, dc = example_sim_setup(node_a, node_b, 1000) # シミュレーション設定
         example.start()
-        ns.sim_run()
+        ns.sim_run() # シミュレーション実行
         df = dc.dataframe
         df['node_distance'] = node_distance
         fidelity_data = pandas.concat([fidelity_data, df])
     return fidelity_data
 
 
-def create_plot():
+def create_plot(): #グラフ表示のための関数
     matplotlib.use('Agg')
     node_distances = [1 + i for i in range(0, 100, 5)]
     fidelities = run_experiment(node_distances)

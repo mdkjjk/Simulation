@@ -1,4 +1,5 @@
-#フィルタリングと蒸留を組み合わせた操作を加えたシミュレーション
+# シミュレーション：蒸留処理->フィルタリング処理を適用する場合のエンタングルメント忠実度の測定
+
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
@@ -30,6 +31,7 @@ from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
+# sim4.py参照
 class Distil(NodeProtocol):
     """Protocol that does local DEJMPS distillation on a node.
 

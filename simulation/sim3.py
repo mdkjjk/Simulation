@@ -1,4 +1,5 @@
-#蒸留操作を加えたシミュレーション
+# シミュレーション：蒸留処理を適用する場合の伝送忠実度の測定
+
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
@@ -30,7 +31,7 @@ from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
 
-class Distil(NodeProtocol):
+class Distil(NodeProtocol): # 蒸留処理を行うためのプロトコル
     """Protocol that does local DEJMPS distillation on a node.
 
     This is done in combination with another node.
@@ -81,14 +82,14 @@ class Distil(NodeProtocol):
         if start_expression is not None and not isinstance(start_expression, EventExpression):
             raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(start_expression)))
 
-    def _setup_dejmp_program(self, conj_rotation):
+    def _setup_dejmp_program(self, conj_rotation): # 蒸留処理を実行するプログラム
         INSTR_ROT = self._INSTR_Rx if not conj_rotation else self._INSTR_RxC
         prog = QuantumProgram(num_qubits=2)
         q1, q2 = prog.get_qubit_indices(2)
-        prog.apply(INSTR_ROT, [q1])
-        prog.apply(INSTR_ROT, [q2])
-        prog.apply(INSTR_CNOT, [q1, q2])
-        prog.apply(INSTR_MEASURE, q2, output_key="m", inplace=False)
+        prog.apply(INSTR_ROT, [q1]) # 回転ゲートを適用
+        prog.apply(INSTR_ROT, [q2]) # 回転ゲートを適用
+        prog.apply(INSTR_CNOT, [q1, q2]) # CNOTゲートを適用
+        prog.apply(INSTR_MEASURE, q2, output_key="m", inplace=False) # 測定
         return prog
 
     def run(self):
@@ -96,18 +97,18 @@ class Distil(NodeProtocol):
         qmemory_ready = self.start_expression
         while True:
             #print(f"{self.name}: Start")
-            # self.send_signal(Signals.WAITING)
-            expr = yield cchannel_ready | qmemory_ready
-            # self.send_signal(Signals.BUSY)
+            expr = yield cchannel_ready | qmemory_ready # 相手の測定結果の到着 or エンタングルメントの到着を待機
+            # 相手の測定結果が到着した場合
             if expr.first_term.value:
-                classical_message = self.port.rx_input(header=self.header)
+                classical_message = self.port.rx_input(header=self.header) # 測定結果を取得
                 if classical_message:
                     self.remote_qcount, self.remote_meas_result = classical_message.items
                     #print(f"{self.name}: Result received at {classical_message} / time: {sim_time()}")
+            # エンタングルメントが到着した場合
             elif expr.second_term.value:
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
-                    event=expr.second_term.triggered_events[0], receiver=self)
+                    event=expr.second_term.triggered_events[0], receiver=self) # エンタングルメントが保存されたメモリポジションを取得
                 #print(f"{self.name}: Entanglement received at {ready_signal.result} / time: {sim_time()}")
                 yield from self._handle_new_qubit(ready_signal.result)
             self._check_success()
@@ -122,43 +123,36 @@ class Distil(NodeProtocol):
         self._waiting_on_second_qubit = False
         return super().start()
 
-    def _clear_qmem_positions(self):
+    def _clear_qmem_positions(self): # 失敗した場合、エンタングルメントを破棄
         positions = [pos for pos in self._qmem_positions if pos is not None]
-        #print(f"{self.name}: pop_positions = {positions} at _clear_qmem_positions")
         if len(positions) > 0:
             self.node.qmemory.pop(positions=positions)
         self._qmem_positions = [None, None]
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
 
     def _handle_new_qubit(self, memory_position):
-        # Process signalling of new entangled qubit
         assert not self.node.qmemory.mem_positions[memory_position].is_empty
+        # 2つ目のエンタングルメントが到着した場合
         if self._waiting_on_second_qubit:
-            # Second qubit arrived: perform distil
             assert not self.node.qmemory.mem_positions[self._qmem_positions[0]].is_empty
             assert memory_position != self._qmem_positions[0]
             self._qmem_positions[1] = memory_position
-            #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
             self._waiting_on_second_qubit = False
             yield from self._node_do_DEJMPS()
+        # 1つ目のエンタングルメントが到着した場合
         else:
-            # New candidate for first qubit arrived
             # Pop previous qubit if present:
             pop_positions = [p for p in self._qmem_positions if p is not None and p != memory_position]
-            #print(f"{self.name}: pop_positions = {pop_positions} at _handle_new_qubit")
             if len(pop_positions) > 0:
                 self.node.qmemory.pop(positions=pop_positions)
             # Set new position:
             self._qmem_positions[0] = memory_position
             self._qmem_positions[1] = None
-            #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
             self.local_qcount += 1
             self.local_meas_result = None
             self._waiting_on_second_qubit = True
 
     def _node_do_DEJMPS(self):
         # Perform DEJMPS distillation protocol locally on one node
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         pos1, pos2 = self._qmem_positions
         if self.node.qmemory.busy:
             yield self.await_program(self.node.qmemory)
@@ -166,22 +160,19 @@ class Distil(NodeProtocol):
         yield self.node.qmemory.execute_program(self._program, [pos1, pos2])  # If instruction not instant
         self.local_meas_result = self._program.output["m"][0]
         self._qmem_positions[1] = None
-        #print(f"{self.name}: qmem_positions = {self._qmem_positions}")
         # Send local results to the remote node to allow it to check for success.
         self.port.tx_output(Message([self.local_qcount, self.local_meas_result],
-                                    header=self.header))
+                                    header=self.header)) # 測定結果を送信
 
-    def _check_success(self):
+    def _check_success(self): # 蒸留の成功/失敗を判定
         # Check if distillation succeeded by comparing local and remote results
         if (self.local_qcount == self.remote_qcount and
                 self.local_meas_result is not None and
                 self.remote_meas_result is not None):
             if self.local_meas_result == self.remote_meas_result:
-                # SUCCESS
                 self.send_signal(Signals.SUCCESS, self._qmem_positions[0])
                 #print(f"{self.name}: SUCCESS / time: {sim_time()}")
             else:
-                # FAILURE
                 self._clear_qmem_positions()
                 self.send_signal(Signals.FAIL, self.local_qcount)
                 #print(f"{self.name}: FAIL / time: {sim_time()}")
@@ -201,7 +192,7 @@ class Distil(NodeProtocol):
             return False
         return True
 
-
+# 以下は、sim1.pyと大体同じ
 class InitStateProgram(QuantumProgram):
     default_num_qubits = 1
 

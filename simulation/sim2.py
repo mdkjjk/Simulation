@@ -1,3 +1,5 @@
+# シミュレーション：フィルタリング処理を適用する場合の伝送忠実度の測定
+
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
@@ -31,7 +33,7 @@ from netsquid.examples.entanglenodes import EntangleNodes
 from pydynaa import EventExpression
 
 
-class Filter(NodeProtocol):
+class Filter(NodeProtocol): # フィルタリング処理を行うためのプロトコル
     """Protocol that does local filtering on a node.
 
     This is done in combination with another node.
@@ -82,7 +84,7 @@ class Filter(NodeProtocol):
             raise TypeError("Start expression should be a {}, not a {}".format(EventExpression, type(start_expression)))
         self._set_measurement_operators(epsilon)
 
-    def _set_measurement_operators(self, epsilon):
+    def _set_measurement_operators(self, epsilon): # 測定演算子の定義
         m0 = ops.Operator("M0", np.sqrt(epsilon) * outerprod(s0) + outerprod(s1))
         m1 = ops.Operator("M1", np.sqrt(1 - epsilon) * outerprod(s0))
         self.meas_ops = [m0, m1]
@@ -91,20 +93,20 @@ class Filter(NodeProtocol):
         cchannel_ready = self.await_port_input(self.port)
         qmemory_ready = self.start_expression
         while True:
-            # self.send_signal(Signals.WAITING)
-            expr = yield cchannel_ready | qmemory_ready
-            # self.send_signal(Signals.BUSY)
+            expr = yield cchannel_ready | qmemory_ready # 相手の測定結果の到着 or エンタングルメントの到着を待機
+            # 相手の測定結果が到着した場合
             if expr.first_term.value:
-                classical_message = self.port.rx_input(header=self.header)
+                classical_message = self.port.rx_input(header=self.header) # 測定結果を取得
                 if classical_message:
                     self.remote_qcount, self.remote_meas_OK = classical_message.items
                     #print(f"{self.name}: Result received at {classical_message} / time: {sim_time()}")
                     self._handle_cchannel_rx()
+            # エンタングルメントが到着した場合
             elif expr.second_term.value:
                 source_protocol = expr.second_term.atomic_source
                 ready_signal = source_protocol.get_signal_by_event(
                     event=expr.second_term.triggered_events[0], receiver=self)
-                self._qmem_pos = ready_signal.result
+                self._qmem_pos = ready_signal.result # エンタングルメントが保存されたメモリポジションを取得
                 #print(f"{self.name}: Entanglement received at {self._qmem_pos} / time: {sim_time()}")
                 yield from self._handle_qubit_rx()
 
@@ -122,46 +124,37 @@ class Filter(NodeProtocol):
         if self._qmem_pos and self.node.qmemory.mem_positions[self._qmem_pos].in_use:
             self.node.qmemory.pop(positions=[self._qmem_pos])
 
-    def _handle_qubit_rx(self):
-        # Handle incoming Qubit on this node.
+    def _handle_qubit_rx(self): # フィルタリング処理を適用
         if self.node.qmemory.busy:
             yield self.await_program(self.node.qmemory)
-        # Retrieve Qubit from input store
-        output = self.node.qmemory.execute_instruction(INSTR_MEASURE, [self._qmem_pos], meas_operators=self.meas_ops)[0]
+        output = self.node.qmemory.execute_instruction(INSTR_MEASURE, [self._qmem_pos], meas_operators=self.meas_ops)[0] # 測定
         if self.node.qmemory.busy:
             yield self.await_program(self.node.qmemory)
         m = output["instr"][0]
-        # m = INSTR_MEASURE(self.node.qmemory, [self._qmem_pos], meas_operators=self.meas_ops)[0]
         self.local_qcount += 1
         self.local_meas_OK = (m == 0)
-        self.port.tx_output(Message([self.local_qcount, self.local_meas_OK], header=self.header))
+        self.port.tx_output(Message([self.local_qcount, self.local_meas_OK], header=self.header)) # 測定結果を送信
         self._check_success()
 
-    def _handle_cchannel_rx(self):
-        # Handle incoming classical message from sister node.
+    def _handle_cchannel_rx(self): # フィルタリング処理 & 測定結果の取得の完了を確認
         if (self.local_qcount == self.remote_qcount and
                 self._qmem_pos is not None and
                 self.node.qmemory.mem_positions[self._qmem_pos].in_use):
             self._check_success()
 
-    def _check_success(self):
-        # Check if protocol succeeded after receiving new input (qubit or classical information).
-        # Returns true if protocol has succeeded on this node
+    def _check_success(self): # フィルタリングの成功/失敗を判定
         if (self.local_qcount > 0 and self.local_qcount == self.remote_qcount and
                 self.local_meas_OK and self.remote_meas_OK):
-            # SUCCESS!
             self.send_signal(Signals.SUCCESS, self._qmem_pos)
             #print(f"{self.name}: SUCCESS / time: {sim_time()}")
         elif self.local_meas_OK and self.local_qcount > self.remote_qcount:
-            # Need to wait for latest remote status
             pass
         else:
-            # FAILURE
             self._handle_fail()
             self.send_signal(Signals.FAIL, self.local_qcount)
             #print(f"{self.name}: FAIL / time: {sim_time()}")
 
-    def _handle_fail(self):
+    def _handle_fail(self): # 失敗した場合、エンタングルメントを破棄
         if self.node.qmemory.mem_positions[self._qmem_pos].in_use:
             self.node.qmemory.pop(positions=[self._qmem_pos])
 
@@ -177,7 +170,7 @@ class Filter(NodeProtocol):
             return False
         return True
 
-
+# 以下は、sim1.pyと大体同じ
 class InitStateProgram(QuantumProgram):
     default_num_qubits = 1
 

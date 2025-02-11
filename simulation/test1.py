@@ -1,4 +1,4 @@
-#量子テレポーテーション
+# シミュレーション：精製処理を適用しない場合のエンタングルメント忠実度の測定
 
 import netsquid as ns
 import pydynaa as pd
@@ -22,7 +22,7 @@ from netsquid.nodes.network import Network
 from netsquid.nodes.connections import DirectConnection
 from netsquid.examples.entanglenodes import EntangleNodes
 
-
+# sim1.py参照
 class Example(LocalProtocol):
     def __init__(self, node_a, node_b, num_runs):
         super().__init__(nodes={"A": node_a, "B": node_b}, name="example")

@@ -1,3 +1,5 @@
+# シミュレーション：フィルタリング処理を適用する場合のエンタングルメント忠実度の測定
+
 import numpy as np
 import netsquid as ns
 import pydynaa as pd
@@ -28,7 +30,7 @@ from netsquid.components.models import DepolarNoiseModel
 from netsquid.nodes.connections import DirectConnection
 from pydynaa import EventExpression
 
-
+# sim2.py参照
 class Filter(NodeProtocol):
     def __init__(self, node, port, start_expression=None, msg_header="filter",
                  epsilon=0.3, name=None):
